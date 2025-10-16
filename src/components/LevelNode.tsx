@@ -51,7 +51,7 @@ export function LevelNode({ level, name, status, onStart, position = "center" }:
             className="w-full bg-white text-secondary-foreground hover:bg-white/90 font-bold"
             size="lg"
           >
-            Start Level
+            Start Conversation
           </Button>
         )}
         

@@ -86,7 +86,7 @@ export default function LearningPath() {
               name={level.name}
               status={level.status}
               position={level.position}
-              onStart={() => console.log(`Start level ${level.id}`)}
+              onStart={() => level.status === "current" ? navigate(`/conversation/${level.id}`) : null}
             />
           ))}
           
