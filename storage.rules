@@ -1,0 +1,80 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the resource
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Helper function to check file size (max 10MB for audio)
+    function isValidAudioSize() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // Helper function to check audio content type
+    function isAudioFile() {
+      return request.resource.contentType.matches('audio/.*');
+    }
+    
+    // User recordings - only accessible by the owner
+    match /audio/user_recordings/{userId}/{fileName} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidAudioSize() && isAudioFile();
+      allow delete: if isOwner(userId);
+    }
+    
+    // Conversation audio - readable by all authenticated users, writable by the owner
+    match /audio/conversations/{conversationId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidAudioSize() && isAudioFile();
+      allow delete: if false; // Conversations should not be deleted
+    }
+    
+    // Bird message audio - readable by all authenticated users
+    match /audio/bird_messages/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only server/admin can write bird messages
+      allow delete: if false;
+    }
+    
+    // Assessment audio recordings
+    match /audio/assessments/{userId}/{fileName} {
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidAudioSize() && isAudioFile();
+      allow delete: if false; // Assessment recordings should not be deleted
+    }
+    
+    // Profile pictures (future feature)
+    match /images/profiles/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId) && request.resource.size < 5 * 1024 * 1024 
+                    && request.resource.contentType.matches('image/.*');
+      allow delete: if isOwner(userId);
+    }
+    
+    // Bird character images - readable by all authenticated users
+    match /images/birds/{birdId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admin can upload bird images
+      allow delete: if false;
+    }
+    
+    // Achievement icons - readable by all authenticated users
+    match /images/achievements/{achievementId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admin can upload achievement icons
+      allow delete: if false;
+    }
+    
+    // Deny access to any path not explicitly defined
+    match /{allPaths=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}
