@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Users can only read/write their own user document
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && request.resource.data.keys().hasAll(['name', 'age']);
+      allow delete: if false; // Users cannot delete their profiles
+    }
+    
+    // User progress documents
+    match /user_progress/{docId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow delete: if false;
+    }
+    
+    // Conversations
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow delete: if false;
+    }
+    
+    // Levels - read-only for authenticated users
+    match /levels/{levelId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admin can write
+    }
+    
+    // Learning paths - read-only for authenticated users
+    match /learning_paths/{pathId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admin can write
+    }
+    
+    // User skills
+    match /user_skills/{docId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow delete: if false;
+    }
+    
+    // User achievements
+    match /user_achievements/{docId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update: if false; // Achievements cannot be updated once unlocked
+      allow delete: if false;
+    }
+    
+    // Bird collection
+    match /bird_collection/{docId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow delete: if false;
+    }
+    
+    // Skills definitions - read-only for authenticated users
+    match /skills/{skillId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admin can write
+    }
+    
+    // Achievements definitions - read-only for authenticated users
+    match /achievements/{achievementId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admin can write
+    }
+    
+    // Bird characters - read-only for authenticated users
+    match /bird_characters/{birdId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admin can write
+    }
+    
+    // Assessment questions - read-only for authenticated users
+    match /assessment_questions/{questionId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admin can write
+    }
+    
+    // Assessment results
+    match /assessment_results/{resultId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update: if false; // Results cannot be changed once submitted
+      allow delete: if false;
+    }
+    
+    // Daily challenges - read-only for authenticated users
+    match /daily_challenges/{challengeId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only admin can write
+    }
+    
+    // User daily challenges
+    match /user_daily_challenges/{docId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update: if false; // Cannot update once completed
+      allow delete: if false;
+    }
+    
+    // Leaderboard - read-only for authenticated users
+    match /leaderboard/{entryId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only cloud functions can write
+    }
+  }
+}
