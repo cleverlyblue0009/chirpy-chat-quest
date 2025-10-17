@@ -1,13 +1,7 @@
-import OpenAI from 'openai';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Message, Level, BirdCharacter } from '@/types/firebase';
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true // Note: In production, use a backend API
-});
+import { apiClient } from '../api/client';
 
 interface AIResponse {
   text: string;
@@ -26,135 +20,27 @@ interface AIResponse {
  * @returns AI-generated response
  */
 export async function generateAIResponse(
-  messages: Message[],
+  conversationId: string,
+  userId: string,
   levelId: string,
   userMessage: string
 ): Promise<AIResponse> {
   try {
-    // Get level details
-    const levelRef = doc(db, 'levels', levelId);
-    const levelDoc = await getDoc(levelRef);
-    
-    if (!levelDoc.exists()) {
-      throw new Error('Level not found');
-    }
-    
-    const level = levelDoc.data() as Level;
-    
-    // Get bird character details
-    const birdRef = doc(db, 'bird_characters', level.bird_character);
-    const birdDoc = await getDoc(birdRef);
-    
-    if (!birdDoc.exists()) {
-      throw new Error('Bird character not found');
-    }
-    
-    const birdCharacter = birdDoc.data() as BirdCharacter;
-    
-    // Build conversation context
-    const conversationHistory = messages.map(msg => ({
-      role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: msg.text
-    }));
-    
-    // Determine if conversation should end (after 5-7 exchanges)
-    const exchangeCount = messages.filter(m => m.sender === 'user').length;
-    const shouldEnd = exchangeCount >= 5;
-    
-    // Create system prompt
-    const systemPrompt = `
-      ${birdCharacter.system_prompt}
-      
-      You are helping a child practice: ${level.conversation_topics.join(', ')}.
-      Level: ${level.name} - ${level.description}
-      
-      Guidelines:
-      - Keep responses short (2-3 sentences maximum)
-      - Use simple, clear language appropriate for children
-      - Be encouraging and positive
-      - Ask follow-up questions to keep the conversation going
-      - Focus on the learning objectives: ${level.conversation_topics.join(', ')}
-      ${shouldEnd ? '- This is the last exchange. Wrap up the conversation positively and congratulate the child.' : ''}
-      
-      Evaluate the child's response for:
-      - Relevance to the topic (0-100)
-      - Appropriate turn-taking (0-100)
-      - Emotional understanding if applicable (0-100)
-      - Clarity of expression (0-100)
-    `;
-    
-    // Generate response using OpenAI
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...conversationHistory,
-        { role: 'user', content: userMessage }
-      ],
-      temperature: 0.7,
-      max_tokens: 150,
-      functions: [
-        {
-          name: 'evaluate_response',
-          description: 'Evaluate the child\'s response',
-          parameters: {
-            type: 'object',
-            properties: {
-              response_text: {
-                type: 'string',
-                description: 'The bird\'s response to the child'
-              },
-              tone: {
-                type: 'string',
-                enum: ['friendly', 'encouraging', 'excited', 'thoughtful', 'congratulatory'],
-                description: 'The tone of the response'
-              },
-              relevance_score: {
-                type: 'number',
-                description: 'How relevant the child\'s response was (0-100)'
-              },
-              turn_taking_score: {
-                type: 'number',
-                description: 'How well the child took their turn (0-100)'
-              },
-              emotional_score: {
-                type: 'number',
-                description: 'How well the child understood emotions if applicable (0-100)'
-              },
-              clarity_score: {
-                type: 'number',
-                description: 'How clearly the child expressed themselves (0-100)'
-              }
-            },
-            required: ['response_text', 'tone', 'relevance_score', 'turn_taking_score', 'emotional_score', 'clarity_score']
-          }
-        }
-      ],
-      function_call: { name: 'evaluate_response' }
+    // Call backend API instead of using OpenAI directly
+    const response = await apiClient.sendChatMessage({
+      conversationId,
+      userId,
+      levelId,
+      userMessage,
     });
     
-    const functionCall = completion.choices[0].message.function_call;
-    const evaluation = JSON.parse(functionCall?.arguments || '{}');
-    
-    // Calculate overall score
-    const scores = [
-      evaluation.relevance_score || 70,
-      evaluation.turn_taking_score || 70,
-      evaluation.emotional_score || 70,
-      evaluation.clarity_score || 70
-    ];
-    const overallScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
-    
-    // Generate feedback
-    const feedback = generateFeedback(overallScore, scores, level.conversation_topics);
-    
     return {
-      text: evaluation.response_text || "That's interesting! Can you tell me more?",
-      birdCharacter: level.bird_character,
-      tone: evaluation.tone || 'friendly',
-      shouldEnd,
-      score: overallScore,
-      feedback
+      text: response.response,
+      birdCharacter: response.birdCharacter,
+      tone: response.tone,
+      shouldEnd: response.shouldEnd,
+      score: response.score,
+      feedback: response.feedback
     };
   } catch (error) {
     console.error('Error generating AI response:', error);

@@ -1,21 +1,4 @@
-import { ElevenLabsClient } from '@elevenlabs/client';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase';
-
-// Initialize ElevenLabs client
-const elevenlabs = new ElevenLabsClient({
-  apiKey: import.meta.env.VITE_ELEVENLABS_API_KEY
-});
-
-// Voice IDs for different bird characters (you'll need to set these up in ElevenLabs)
-const BIRD_VOICES = {
-  ruby_robin: 'rachel', // Use a warm, friendly voice
-  sage_owl: 'antoni', // Use a calm, wise voice
-  charlie_sparrow: 'josh', // Use an energetic voice
-  harmony_hawk: 'bella', // Use a confident voice
-  luna_lark: 'elli', // Use a gentle, creative voice
-  phoenix_finch: 'adam' // Use a motivating voice
-};
+import { apiClient } from '../api/client';
 
 /**
  * Generate speech audio from text using ElevenLabs
@@ -30,52 +13,14 @@ export async function generateSpeech(
   conversationId?: string
 ): Promise<string> {
   try {
-    // Get the appropriate voice ID
-    const voiceId = BIRD_VOICES[birdCharacter as keyof typeof BIRD_VOICES] || BIRD_VOICES.ruby_robin;
-    
-    // Generate audio using ElevenLabs
-    const audioStream = await elevenlabs.generate({
-      voice: voiceId,
+    // Call backend API to generate speech
+    const response = await apiClient.generateSpeech({
       text,
-      model_id: 'eleven_monolingual_v1',
-      voice_settings: {
-        stability: 0.75,
-        similarity_boost: 0.75,
-        style: 0.5,
-        use_speaker_boost: true
-      }
+      birdCharacter,
+      conversationId,
     });
     
-    // Convert stream to blob
-    const chunks: Uint8Array[] = [];
-    const reader = audioStream.getReader();
-    
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) chunks.push(value);
-    }
-    
-    const audioBlob = new Blob(chunks, { type: 'audio/mpeg' });
-    
-    // Upload to Firebase Storage
-    const timestamp = Date.now();
-    const fileName = `${birdCharacter}_${timestamp}.mp3`;
-    
-    let storagePath: string;
-    if (conversationId) {
-      storagePath = `audio/conversations/${conversationId}/${fileName}`;
-    } else {
-      storagePath = `audio/bird_messages/${fileName}`;
-    }
-    
-    const storageRef = ref(storage, storagePath);
-    const uploadResult = await uploadBytes(storageRef, audioBlob, {
-      contentType: 'audio/mpeg'
-    });
-    
-    const downloadUrl = await getDownloadURL(uploadResult.ref);
-    return downloadUrl;
+    return response.audioUrl;
   } catch (error) {
     console.error('Error generating speech:', error);
     

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Mic, MicOff, Play, CheckCircle, Loader2, Volume2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { assessmentApi } from '@/lib/api/assessmentApi';
+import { apiClient } from '@/lib/api/client';
 import { SpeechRecognition, uploadUserRecording } from '@/lib/speech/speechToText';
 import { playAudioWithAnimation } from '@/lib/speech/textToSpeech';
 
@@ -178,8 +178,11 @@ export default function Assessment() {
     try {
       if (!currentUser) throw new Error('No user logged in');
       
-      // Calculate scores based on answers
-      const result = await assessmentApi.submitAssessment(currentUser.uid, answers);
+      // Calculate scores based on answers using backend API
+      const result = await apiClient.scoreAssessment({
+        userId: currentUser.uid,
+        answers
+      });
       
       toast({
         title: "Assessment Complete!",
