@@ -12,59 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api/client';
 import { SpeechRecognition, uploadUserRecording } from '@/lib/speech/speechToText';
 import { playAudioWithAnimation } from '@/lib/speech/textToSpeech';
+import { fetchAssessmentQuestions, saveAssessmentResult, type AssessmentQuestion } from '@/lib/firebase/assessmentService';
 
-interface AssessmentQuestion {
-  id: string;
-  type: 'voice' | 'multiple_choice' | 'emotion_recognition' | 'ordering';
-  content: string;
-  instructions?: string;
-  options?: string[];
-  correctAnswer?: string | string[];
-  audioUrl?: string;
-}
-
-const ASSESSMENT_QUESTIONS: AssessmentQuestion[] = [
-  {
-    id: 'q1',
-    type: 'voice',
-    content: 'Say hello and tell me your name',
-    instructions: 'Click the microphone and introduce yourself'
-  },
-  {
-    id: 'q2',
-    type: 'multiple_choice',
-    content: 'What do you say when you meet someone new?',
-    options: ['Goodbye', 'Nice to meet you', 'See you later', 'Go away'],
-    correctAnswer: 'Nice to meet you'
-  },
-  {
-    id: 'q3',
-    type: 'emotion_recognition',
-    content: 'How does this person feel? 😊',
-    options: ['Happy', 'Sad', 'Angry', 'Scared'],
-    correctAnswer: 'Happy'
-  },
-  {
-    id: 'q4',
-    type: 'voice',
-    content: 'Someone says "How are you?" What do you say back?',
-    instructions: 'Click the microphone and respond'
-  },
-  {
-    id: 'q5',
-    type: 'ordering',
-    content: 'Put these conversation steps in order',
-    options: ['Say goodbye', 'Say hello', 'Ask a question', 'Listen to answer'],
-    correctAnswer: ['Say hello', 'Ask a question', 'Listen to answer', 'Say goodbye']
-  },
-  {
-    id: 'q6',
-    type: 'multiple_choice',
-    content: 'Your friend is crying. What should you do?',
-    options: ['Laugh', 'Walk away', 'Ask if they\'re okay', 'Ignore them'],
-    correctAnswer: 'Ask if they\'re okay'
-  }
-];
 
 export default function Assessment() {
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -76,19 +25,96 @@ export default function Assessment() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [loading, setLoading] = useState(false);
   const [speechRecognition, setSpeechRecognition] = useState<SpeechRecognition | null>(null);
+  const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
+  const [questionsLoading, setQuestionsLoading] = useState(true);
   
   const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
-  const question = ASSESSMENT_QUESTIONS[currentQuestion];
-  const progress = ((currentQuestion + 1) / ASSESSMENT_QUESTIONS.length) * 100;
+  const question = questions[currentQuestion];
+  const progress = questions.length > 0 ? ((currentQuestion + 1) / questions.length) * 100 : 0;
 
   useEffect(() => {
     // Initialize speech recognition
     const recognition = new SpeechRecognition();
     setSpeechRecognition(recognition);
   }, []);
+
+  // Fetch assessment questions from Firebase
+  useEffect(() => {
+    const loadQuestions = async () => {
+      try {
+        setQuestionsLoading(true);
+        const fetchedQuestions = await fetchAssessmentQuestions();
+        if (fetchedQuestions.length === 0) {
+          // Fallback questions if Firebase is empty
+          const fallbackQuestions: AssessmentQuestion[] = [
+            {
+              id: 'q1',
+              type: 'voice',
+              content: 'Say hello and tell me your name',
+              instructions: 'Click the microphone and introduce yourself',
+              order: 1
+            },
+            {
+              id: 'q2',
+              type: 'multiple_choice',
+              content: 'What do you say when you meet someone new?',
+              options: ['Goodbye', 'Nice to meet you', 'See you later', 'Go away'],
+              correctAnswer: 'Nice to meet you',
+              order: 2
+            },
+            {
+              id: 'q3',
+              type: 'emotion_recognition',
+              content: 'How does this person feel? 😊',
+              options: ['Happy', 'Sad', 'Angry', 'Scared'],
+              correctAnswer: 'Happy',
+              order: 3
+            },
+            {
+              id: 'q4',
+              type: 'voice',
+              content: 'Someone says "How are you?" What do you say back?',
+              instructions: 'Click the microphone and respond',
+              order: 4
+            },
+            {
+              id: 'q5',
+              type: 'ordering',
+              content: 'Put these conversation steps in order',
+              options: ['Say goodbye', 'Say hello', 'Ask a question', 'Listen to answer'],
+              correctAnswer: ['Say hello', 'Ask a question', 'Listen to answer', 'Say goodbye'],
+              order: 5
+            },
+            {
+              id: 'q6',
+              type: 'multiple_choice',
+              content: 'Your friend is crying. What should you do?',
+              options: ['Laugh', 'Walk away', 'Ask if they\'re okay', 'Ignore them'],
+              correctAnswer: 'Ask if they\'re okay',
+              order: 6
+            }
+          ];
+          setQuestions(fallbackQuestions);
+        } else {
+          setQuestions(fetchedQuestions);
+        }
+      } catch (error) {
+        console.error('Error loading questions:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load assessment questions. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setQuestionsLoading(false);
+      }
+    };
+
+    loadQuestions();
+  }, [toast]);
 
   // Check if assessment already completed
   useEffect(() => {
@@ -161,7 +187,7 @@ export default function Assessment() {
     }
     
     // Move to next question or complete assessment
-    if (currentQuestion < ASSESSMENT_QUESTIONS.length - 1) {
+    if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(prev => prev + 1);
       setSelectedOption('');
       setOrderedOptions([]);
@@ -183,6 +209,14 @@ export default function Assessment() {
         userId: currentUser.uid,
         answers
       });
+      
+      // Save to Firebase for record keeping
+      await saveAssessmentResult(
+        currentUser.uid,
+        answers,
+        result.score || 0,
+        result.assignedPath || 'beginner'
+      );
       
       toast({
         title: "Assessment Complete!",
@@ -335,6 +369,29 @@ export default function Assessment() {
     }
   };
 
+  if (questionsLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-blue-50 p-4 flex items-center justify-center">
+        <Card className="p-8">
+          <div className="flex flex-col items-center space-y-4">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-muted-foreground">Loading assessment questions...</p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!question) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-orange-50 to-blue-50 p-4 flex items-center justify-center">
+        <Card className="p-8">
+          <p className="text-muted-foreground">No questions available</p>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-blue-50 p-4">
       <div className="max-w-2xl mx-auto">
@@ -350,7 +407,7 @@ export default function Assessment() {
         <Card className="shadow-xl">
           <CardHeader>
             <div className="flex justify-between items-center mb-4">
-              <CardTitle>Question {currentQuestion + 1} of {ASSESSMENT_QUESTIONS.length}</CardTitle>
+              <CardTitle>Question {currentQuestion + 1} of {questions.length}</CardTitle>
               <span className="text-sm text-muted-foreground">{Math.round(progress)}% Complete</span>
             </div>
             <Progress value={progress} className="h-2" />
@@ -377,7 +434,7 @@ export default function Assessment() {
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Processing...
                   </>
-                ) : currentQuestion === ASSESSMENT_QUESTIONS.length - 1 ? (
+                ) : currentQuestion === questions.length - 1 ? (
                   <>
                     Complete Assessment
                     <CheckCircle className="ml-2 h-4 w-4" />

@@ -1,31 +1,88 @@
-import { ArrowLeft, Lock, Check, Sparkles } from "lucide-react";
+import { ArrowLeft, Lock, Check, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { subscribeToUserBirds, setActiveBird, type Bird } from "@/lib/firebase/birdService";
 import forestBg from "@/assets/forest-background.jpg";
 import robinAvatar from "@/assets/robin-character.png";
 import owlAvatar from "@/assets/owl-character.png";
 import sparrowAvatar from "@/assets/sparrow-character.png";
 
-interface Bird {
-  id: number;
-  name: string;
-  description: string;
-  image: string;
-  unlockRequirement: string;
-  isUnlocked: boolean;
-  isActive: boolean;
-  personality: string;
-}
+const birdAvatarMap: { [key: string]: string } = {
+  'ruby_robin': robinAvatar,
+  'sage_owl': owlAvatar,
+  'charlie_sparrow': sparrowAvatar,
+};
 
 export default function BirdCollection() {
   const navigate = useNavigate();
-  const [selectedBird, setSelectedBird] = useState<number | null>(null);
+  const { currentUser } = useAuth();
+  const { toast } = useToast();
+  const [selectedBird, setSelectedBird] = useState<string | null>(null);
+  const [birds, setBirds] = useState<Bird[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [changingBird, setChangingBird] = useState<string | null>(null);
 
-  const birds: Bird[] = [
+  // Subscribe to user's bird collection
+  useEffect(() => {
+    if (!currentUser) return;
+
+    setLoading(true);
+    const unsubscribe = subscribeToUserBirds(currentUser.uid, (fetchedBirds) => {
+      // Map avatar images
+      const birdsWithAvatars = fetchedBirds.map(bird => ({
+        ...bird,
+        image: birdAvatarMap[bird.id] || bird.image
+      }));
+      
+      setBirds(birdsWithAvatars);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  const handleSelectBird = async (birdId: string) => {
+    if (!currentUser) return;
+    
+    try {
+      setChangingBird(birdId);
+      await setActiveBird(currentUser.uid, birdId);
+      
+      toast({
+        title: "Bird Changed!",
+        description: `Your active companion has been changed.`,
+      });
+    } catch (error) {
+      console.error('Error changing bird:', error);
+      toast({
+        title: "Error",
+        description: "Failed to change bird. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setChangingBird(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading your bird collection...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Use fallback birds if Firebase is empty
+  const displayBirds = birds.length > 0 ? birds : [
     {
-      id: 1,
+      id: 'ruby_robin',
       name: "Ruby Robin",
       description: "Your first friend in the forest",
       image: robinAvatar,
@@ -35,17 +92,17 @@ export default function BirdCollection() {
       personality: "Ruby loves to talk about feelings and helps you express yourself!"
     },
     {
-      id: 2,
+      id: 'sage_owl',
       name: "Wise Owl",
       description: "The patient teacher",
       image: owlAvatar,
       unlockRequirement: "Complete Level 3",
-      isUnlocked: true,
+      isUnlocked: false,
       isActive: false,
       personality: "Wise Owl teaches you to listen carefully and think before speaking."
     },
     {
-      id: 3,
+      id: 'charlie_sparrow',
       name: "Chatty Sparrow",
       description: "The energetic friend",
       image: sparrowAvatar,
@@ -54,39 +111,9 @@ export default function BirdCollection() {
       isActive: false,
       personality: "Sparrow loves quick conversations and helps you keep up with fast talkers!"
     },
-    {
-      id: 4,
-      name: "Blue Jay",
-      description: "The confident speaker",
-      image: "",
-      unlockRequirement: "Complete Level 7",
-      isUnlocked: false,
-      isActive: false,
-      personality: "Blue Jay teaches you to speak up and share your ideas with confidence!"
-    },
-    {
-      id: 5,
-      name: "Hummingbird",
-      description: "The quick thinker",
-      image: "",
-      unlockRequirement: "Complete Level 9",
-      isUnlocked: false,
-      isActive: false,
-      personality: "Hummingbird helps you think on your feet during conversations!"
-    },
-    {
-      id: 6,
-      name: "Cardinal",
-      description: "The empathy expert",
-      image: "",
-      unlockRequirement: "Complete Level 11",
-      isUnlocked: false,
-      isActive: false,
-      personality: "Cardinal teaches you about understanding others' feelings and perspectives."
-    },
   ];
 
-  const unlockedCount = birds.filter(b => b.isUnlocked).length;
+  const unlockedCount = displayBirds.filter(b => b.isUnlocked).length;
 
   return (
     <div className="min-h-screen relative overflow-hidden pb-24">
@@ -113,7 +140,7 @@ export default function BirdCollection() {
                 🪺 Your Bird Collection
               </h1>
               <p className="text-primary-foreground/80 mt-1">
-                Collected {unlockedCount} of {birds.length} birds
+                Collected {unlockedCount} of {displayBirds.length} birds
               </p>
             </div>
           </div>
@@ -123,7 +150,7 @@ export default function BirdCollection() {
       {/* Bird Grid */}
       <div className="relative z-10 container max-w-6xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {birds.map((bird) => (
+          {displayBirds.map((bird) => (
             <Card 
               key={bird.id}
               className={`
@@ -184,12 +211,20 @@ export default function BirdCollection() {
                     <Button 
                       variant="default" 
                       className="w-full font-bold"
+                      disabled={changingBird !== null}
                       onClick={(e) => {
                         e.stopPropagation();
-                        console.log(`Select ${bird.name}`);
+                        handleSelectBird(bird.id);
                       }}
                     >
-                      Select as Active
+                      {changingBird === bird.id ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Selecting...
+                        </>
+                      ) : (
+                        'Select as Active'
+                      )}
                     </Button>
                   )
                 ) : (
