@@ -5,7 +5,7 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import OpenAI from 'openai';
-import { ElevenLabsClient } from '@elevenlabs/client';
+import { ElevenLabsClient } from 'elevenlabs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
