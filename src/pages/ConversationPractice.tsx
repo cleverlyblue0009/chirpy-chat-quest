@@ -18,7 +18,7 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
-import { generateAIResponse } from "@/lib/ai/conversationEngine";
+import { generateAIResponse, generateInitialGreeting } from "@/lib/ai/conversationEngine";
 import { generateSpeech, playAudioWithAnimation } from "@/lib/speech/textToSpeech";
 import { analyzePronunciation } from "@/lib/speech/pronunciation";
 import forestBg from "@/assets/forest-background.jpg";
@@ -179,16 +179,34 @@ export default function ConversationPractice() {
         
         setConversationId(conversationRef.id);
         
-        // Generate initial greeting
-        const greeting = `Hi there! I'm ${birdCharacter.name}! ${levelData.description}. Let's practice together!`;
+        // Generate initial greeting from API
+        let greetingData;
+        try {
+          greetingData = await generateInitialGreeting(levelId);
+        } catch (error) {
+          console.error('Failed to generate initial greeting:', error);
+          toast({
+            title: "Connection Error",
+            description: "Unable to start conversation. Please check your connection.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
         
         // Generate audio for greeting
-        const audioUrl = await generateSpeech(greeting, birdCharacter.id, conversationRef.id);
+        let audioUrl: string | undefined;
+        try {
+          audioUrl = await generateSpeech(greetingData.text, greetingData.birdCharacter, conversationRef.id);
+        } catch (error) {
+          console.error('Failed to generate greeting audio:', error);
+          // Continue without audio
+        }
         
         // Add initial message
       const initialMessage: Message = {
         sender: 'bird',
-        text: greeting,
+        text: greetingData.text,
         timestamp: Timestamp.now(),
       };
       
@@ -518,27 +536,44 @@ export default function ConversationPractice() {
       setCurrentQuestion(prev => prev + 1);
       
       // Generate AI response
-      const aiResponse = await generateAIResponse(
-        conversationId,
-        currentUser.uid,
-        levelId,
-        text
-      );
+      let aiResponse;
+      try {
+        aiResponse = await generateAIResponse(
+          conversationId,
+          currentUser.uid,
+          levelId,
+          text
+        );
+      } catch (error) {
+        console.error('Failed to get AI response:', error);
+        toast({
+          title: "Connection Error",
+          description: "Unable to get a response. Please check your connection and try again.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return; // Exit early if API fails
+      }
       
       // Generate audio for AI response
       let responseAudioUrl: string | undefined;
       if (aiResponse.text) {
-        responseAudioUrl = await generateSpeech(
-          aiResponse.text,
-          aiResponse.birdCharacter || 'ruby_robin',
-          conversationId
-        );
+        try {
+          responseAudioUrl = await generateSpeech(
+            aiResponse.text,
+            aiResponse.birdCharacter || 'ruby_robin',
+            conversationId
+          );
+        } catch (error) {
+          console.error('Failed to generate speech:', error);
+          // Continue without audio
+        }
       }
       
       // Add bird response to conversation
       const birdMessage: Message = {
         sender: 'bird',
-        text: aiResponse.text || "I'm having trouble understanding. Can you try again?",
+        text: aiResponse.text,
         timestamp: Timestamp.now(),
       };
       
