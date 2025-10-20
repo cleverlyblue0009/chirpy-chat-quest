@@ -56,11 +56,11 @@ const BIRD_VOICES = {
 };
 
 // ======================
-// CHAT API ENDPOINT
+// CHAT API ENDPOINT - Enhanced for Autism-Aware Conversations
 // ======================
 app.post('/api/chat', async (req, res) => {
   try {
-    const { conversationId, userId, levelId, userMessage } = req.body;
+    const { conversationId, userId, levelId, userMessage, systemPrompt, analysisData } = req.body;
 
     if (!conversationId || !userId || !levelId || !userMessage) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -94,56 +94,98 @@ app.post('/api/chat', async (req, res) => {
     const exchangeCount = conversation.messages.filter(m => m.sender === 'user').length;
     const shouldEnd = exchangeCount >= 5;
 
-    // Create system prompt
-    const systemPrompt = `
+    // Use provided system prompt or create enhanced default
+    const enhancedSystemPrompt = systemPrompt || `
       ${birdCharacter.system_prompt}
       
-      You are helping a child practice: ${level.conversation_topics.join(', ')}.
+      You are helping an autistic child aged 6-14 practice: ${level.objectives ? level.objectives.join(', ') : level.conversation_topics.join(', ')}.
       Level: ${level.name} - ${level.description}
       
-      Guidelines:
-      - Keep responses short (2-3 sentences maximum)
-      - Use simple, clear language appropriate for children
-      - Be encouraging and positive
-      - Ask follow-up questions to keep the conversation going
-      - Focus on the learning objectives: ${level.conversation_topics.join(', ')}
-      ${shouldEnd ? '- This is the last exchange. Wrap up the conversation positively and congratulate the child.' : ''}
+      Autism-Aware Guidelines:
+      - Keep responses short (2-3 sentences maximum, under 50 words)
+      - Use simple, concrete language (avoid metaphors unless explaining)
+      - Be encouraging and positive - celebrate ALL attempts
+      - Accept brief responses as valid
+      - Give processing time - acknowledge pauses are okay
+      - Never pressure for eye contact
+      - One question or idea at a time
+      - Validate echolalia and special interests
+      - Focus on the learning objectives: ${level.objectives ? level.objectives.join(', ') : level.conversation_topics.join(', ')}
+      ${shouldEnd ? '- This is the last exchange. Wrap up positively, summarize what they did well, and congratulate enthusiastically!' : ''}
+      ${analysisData?.needs_support ? '- Child needs extra support. Simplify language and offer choices.' : ''}
+      ${analysisData?.engagement_level === 'high' ? '- Child is highly engaged! Match their enthusiasm!' : ''}
     `;
 
-    // Generate response using OpenAI
+    // Generate response using OpenAI with enhanced parameters
     const completion = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: enhancedSystemPrompt },
         ...conversationHistory,
         { role: 'user', content: userMessage }
       ],
       temperature: 0.7,
-      max_tokens: 150,
+      max_tokens: 100, // Shorter for clearer responses
+      presence_penalty: 0.1, // Encourage variety
+      frequency_penalty: 0.1, // Avoid repetition
     });
 
     const aiResponse = completion.choices[0].message.content;
 
-    // Calculate scores (simplified scoring)
+    // Calculate autism-aware scores (always encouraging)
     const scores = {
-      relevance: Math.floor(70 + Math.random() * 30),
-      turnTaking: Math.floor(70 + Math.random() * 30),
-      emotional: Math.floor(70 + Math.random() * 30),
+      relevance: analysisData?.content_relevance || Math.floor(65 + Math.random() * 35),
+      turnTaking: analysisData?.turn_appropriate !== false ? Math.floor(75 + Math.random() * 25) : 70,
+      emotional: analysisData?.emotional_content?.length > 0 ? 90 : Math.floor(70 + Math.random() * 30),
       clarity: Math.floor(70 + Math.random() * 30),
+      engagement: analysisData?.engagement_level === 'high' ? 95 : 
+                  analysisData?.engagement_level === 'low' ? 65 : 80,
+      skillDemonstration: analysisData?.strategy_used?.length ? analysisData.strategy_used.length * 20 : 70
     };
-    const overallScore = Math.floor((scores.relevance + scores.turnTaking + scores.emotional + scores.clarity) / 4);
-
-    // Generate feedback
-    let feedback = '';
-    if (overallScore >= 90) {
-      feedback = "Outstanding work! You're a communication superstar! 🌟";
-    } else if (overallScore >= 80) {
-      feedback = "Great job! You're communicating very well!";
-    } else if (overallScore >= 70) {
-      feedback = "Good work! You're improving!";
-    } else {
-      feedback = "Keep practicing! Every conversation helps you get better!";
+    
+    // Weight scores appropriately for autism (engagement matters more than perfect relevance)
+    const weights = {
+      relevance: 0.15,
+      turnTaking: 0.20,
+      emotional: 0.15,
+      clarity: 0.10,
+      engagement: 0.25,
+      skillDemonstration: 0.15
+    };
+    
+    let weightedSum = 0;
+    for (const [key, value] of Object.entries(scores)) {
+      weightedSum += value * (weights[key] || 0.1);
     }
+    
+    // Ensure minimum score of 60 for encouragement
+    const overallScore = Math.max(60, Math.floor(weightedSum));
+
+    // Generate autism-aware, strength-based feedback
+    let feedback = '';
+    const strengths = [];
+    
+    if (scores.engagement > 80) strengths.push('amazing engagement');
+    if (scores.emotional > 80) strengths.push('expressing feelings');
+    if (scores.turnTaking > 80) strengths.push('great turn-taking');
+    if (analysisData?.special_interest_mentioned) strengths.push('sharing your interests');
+    if (analysisData?.question_asked) strengths.push('asking questions');
+    
+    if (overallScore >= 90) {
+      feedback = "🌟 Outstanding! You're a conversation superstar! ";
+    } else if (overallScore >= 80) {
+      feedback = "🎉 Great job! You're doing wonderfully! ";
+    } else if (overallScore >= 70) {
+      feedback = "👏 Good work! You're learning so well! ";
+    } else {
+      feedback = "💪 Nice try! Every conversation helps you grow! ";
+    }
+    
+    if (strengths.length > 0) {
+      feedback += `You're amazing at ${strengths.join(' and ')}! `;
+    }
+    
+    feedback += "Keep going, you're doing great!";
 
     // Save user message to Firestore
     const userMessageData = {
@@ -173,12 +215,17 @@ app.post('/api/chat', async (req, res) => {
 
     res.json({
       response: aiResponse,
+      text: aiResponse, // Add text field for compatibility
       birdCharacter: level.bird_character,
-      tone: shouldEnd ? 'congratulatory' : 'encouraging',
+      tone: analysisData?.emotional_content?.includes('sad') ? 'calming' :
+            analysisData?.engagement_level === 'high' ? 'playful' :
+            shouldEnd ? 'congratulatory' : 'encouraging',
       shouldEnd,
       score: overallScore,
       feedback,
       scores,
+      hints: analysisData?.needs_support ? 
+        ['Try saying hello', 'Tell me how you feel', 'You can take your time'] : undefined,
     });
   } catch (error) {
     console.error('Chat API error:', error);

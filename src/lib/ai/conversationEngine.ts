@@ -2,6 +2,11 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Message, Level, BirdCharacter } from '@/types/firebase';
 import { apiClient } from '../api/client';
+import { 
+  analyzeChildResponse, 
+  generateAdaptiveResponse,
+  initializeAdaptiveConversation 
+} from './enhancedConversationEngine';
 
 interface AIResponse {
   text: string;
@@ -26,16 +31,39 @@ export async function generateAIResponse(
   userMessage: string
 ): Promise<AIResponse> {
   try {
-    // Call backend API instead of using OpenAI directly
+    // Use enhanced adaptive response generation
+    const context = {
+      levelId,
+      userId,
+      conversationId,
+      exchangeCount: 0, // This should be tracked properly
+      userResponses: [],
+      objectives: [],
+      birdCharacter: 'ruby_robin',
+    };
+    
+    // Get level data for context
+    const levelDoc = await getDoc(doc(db, 'levels', levelId));
+    if (levelDoc.exists()) {
+      const levelData = levelDoc.data();
+      context.objectives = levelData.objectives || [];
+      context.birdCharacter = levelData.bird_character || 'ruby_robin';
+    }
+    
+    // Analyze the user's response
+    const analysis = analyzeChildResponse(userMessage, context);
+    
+    // Call backend API with enhanced context
     const response = await apiClient.sendChatMessage({
       conversationId,
       userId,
       levelId,
       userMessage,
+      analysisData: analysis
     });
     
     return {
-      text: response.response,
+      text: response.text || response.response,
       birdCharacter: response.birdCharacter,
       tone: response.tone,
       shouldEnd: response.shouldEnd,

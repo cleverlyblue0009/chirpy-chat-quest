@@ -125,12 +125,22 @@ export default function Dashboard() {
     const levelsRef = collection(db, 'levels');
     const progressRef = collection(db, 'user_progress');
     
-    // Subscribe to current level
+    // Subscribe to current level - use currentLevel or default to level_1
+    const currentLevelId = userStats.currentLevel || userStats.current_level_id || 'level_1';
     const unsubscribeLevels = onSnapshot(levelsRef, (levelsSnapshot) => {
-      const level = levelsSnapshot.docs.find(doc => doc.id === userStats.currentLevel);
+      const level = levelsSnapshot.docs.find(doc => doc.id === currentLevelId);
       if (level) {
-        setCurrentLevelName(level.data().name || 'Level 1');
-        setTotalConversationsNeeded(level.data().required_conversations || 5);
+        const levelData = level.data();
+        setCurrentLevelName(levelData.name || 'Hello & Goodbye');
+        setTotalConversationsNeeded(levelData.required_conversations || 3);
+      } else {
+        // If level not found, use first level
+        const firstLevel = levelsSnapshot.docs.find(doc => doc.data().order === 1);
+        if (firstLevel) {
+          const levelData = firstLevel.data();
+          setCurrentLevelName(levelData.name || 'Hello & Goodbye');
+          setTotalConversationsNeeded(levelData.required_conversations || 3);
+        }
       }
     });
 
