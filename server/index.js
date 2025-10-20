@@ -8,6 +8,9 @@ import OpenAI from 'openai';
 import elevenLabsModule from 'elevenlabs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import fs from 'fs';
+import { promises as fsPromises } from 'fs';
+import { Readable } from 'stream';
 
 // Load environment variables
 dotenv.config();
@@ -19,6 +22,10 @@ const __dirname = dirname(__filename);
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from public directory
+const publicPath = join(__dirname, '..', 'public');
+app.use('/audio', express.static(join(publicPath, 'audio')));
 
 // Initialize Firebase Admin
 const serviceAccount = {
@@ -246,15 +253,57 @@ app.post('/api/tts', async (req, res) => {
 
     // Get the appropriate voice ID
     const voiceId = BIRD_VOICES[birdCharacter] || BIRD_VOICES.ruby_robin;
+    
+    console.log('Generating speech for text:', text.substring(0, 50) + '...');
+    console.log('Using voice ID:', voiceId);
 
-    // For now, return a mock URL to test the rest of the functionality
-    // TODO: Implement actual ElevenLabs integration once Firebase Storage is configured
-    console.log('TTS request received for text:', text.substring(0, 50) + '...');
-    
-    // Return a placeholder audio URL
-    const mockAudioUrl = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESQAABEIAAABAAAAZGF0YQAAAAA=';
-    
-    res.json({ audioUrl: mockAudioUrl });
+    try {
+      // Generate audio using ElevenLabs
+      const audioStream = await elevenlabs.textToSpeech.convert(voiceId, {
+        text: text,
+        model_id: 'eleven_monolingual_v1',
+        output_format: 'mp3_44100_128',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.5,
+        },
+      });
+
+      // Convert the readable stream to a buffer
+      const chunks = [];
+      for await (const chunk of Readable.from(audioStream)) {
+        chunks.push(chunk);
+      }
+      const audioBuffer = Buffer.concat(chunks);
+      
+      // Create public audio directory if it doesn't exist
+      const publicDir = join(__dirname, '..', 'public', 'audio');
+      await fsPromises.mkdir(publicDir, { recursive: true });
+      
+      // Save audio file locally
+      const timestamp = Date.now();
+      const fileName = `${birdCharacter}_${timestamp}.mp3`;
+      const filePath = join(publicDir, fileName);
+      
+      await fsPromises.writeFile(filePath, audioBuffer);
+      
+      // Return the URL to access the audio file
+      const audioUrl = `/audio/${fileName}`;
+      
+      console.log('Audio generated successfully:', audioUrl);
+      res.json({ audioUrl });
+      
+    } catch (elevenLabsError) {
+      console.error('ElevenLabs API error:', elevenLabsError);
+      
+      // Fallback: Use browser's text-to-speech as a backup
+      // Return a special marker that tells the frontend to use browser TTS
+      res.json({ 
+        audioUrl: null, 
+        useBrowserTTS: true,
+        text: text 
+      });
+    }
   } catch (error) {
     console.error('TTS API error:', error);
     console.error('Full error details:', error.message, error.stack);
