@@ -11,6 +11,7 @@ import Signup from "./pages/Signup";
 import Onboarding from "./pages/Onboarding";
 import Assessment from "./pages/Assessment";
 import LearningPath from "./pages/LearningPath";
+import EnhancedLearningPath from "./pages/EnhancedLearningPath";
 import BirdCollection from "./pages/BirdCollection";
 import ConversationPractice from "./pages/ConversationPractice";
 import NotFound from "./pages/NotFound";
@@ -47,7 +48,7 @@ const App = () => (
             } />
             <Route path="/path" element={
               <ProtectedRoute requiresAssessment>
-                <LearningPath />
+                <EnhancedLearningPath />
               </ProtectedRoute>
             } />
             <Route path="/birds" element={

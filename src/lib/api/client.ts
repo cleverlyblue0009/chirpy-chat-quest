@@ -31,12 +31,14 @@ class ApiClient {
     return response.json();
   }
 
-  // Chat API
+  // Chat API - Enhanced with autism-aware parameters
   async sendChatMessage(data: {
     conversationId: string;
     userId: string;
     levelId: string;
     userMessage: string;
+    systemPrompt?: string;
+    analysisData?: any;
   }) {
     return this.request('/api/chat', {
       method: 'POST',
