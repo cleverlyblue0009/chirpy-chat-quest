@@ -62,26 +62,23 @@ export async function generateAIResponse(
       analysisData: analysis
     });
     
+    // Ensure we have valid response data from API
+    if (!response.text && !response.response) {
+      throw new Error('No response text received from API');
+    }
+    
     return {
       text: response.text || response.response,
-      birdCharacter: response.birdCharacter,
-      tone: response.tone,
-      shouldEnd: response.shouldEnd,
-      score: response.score,
-      feedback: response.feedback
+      birdCharacter: response.birdCharacter || context.birdCharacter || 'ruby_robin',
+      tone: response.tone || 'encouraging',
+      shouldEnd: response.shouldEnd || false,
+      score: response.score || 0,
+      feedback: response.feedback || ''
     };
   } catch (error) {
     console.error('Error generating AI response:', error);
-    
-    // Fallback response
-    return {
-      text: "That's great! Keep going, you're doing wonderfully!",
-      birdCharacter: 'ruby_robin',
-      tone: 'encouraging',
-      shouldEnd: false,
-      score: 75,
-      feedback: 'Keep practicing! You\'re making great progress!'
-    };
+    // Re-throw the error to be handled by the caller
+    throw error;
   }
 }
 
@@ -174,12 +171,8 @@ export async function generateInitialGreeting(
     };
   } catch (error) {
     console.error('Error generating initial greeting:', error);
-    
-    // Fallback greeting
-    return {
-      text: "Hello there! I'm Ruby Robin, and I'm excited to chat with you today! What's your name?",
-      birdCharacter: 'ruby_robin'
-    };
+    // Re-throw the error to be handled by the caller
+    throw error;
   }
 }
 

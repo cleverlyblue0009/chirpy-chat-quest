@@ -286,7 +286,7 @@ export async function generateAdaptiveResponse(
     };
   } catch (error) {
     console.error('Error generating adaptive response:', error);
-    return getFallbackResponse(context);
+    throw error; // Re-throw to let caller handle
   }
 }
 

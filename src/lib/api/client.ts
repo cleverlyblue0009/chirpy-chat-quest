@@ -22,13 +22,20 @@ class ApiClient {
       },
     };
 
-    const response = await fetch(url, config);
+    try {
+      const response = await fetch(url, config);
 
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API Error: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Request failed:', endpoint, error);
+      throw error;
     }
-
-    return response.json();
   }
 
   // Chat API - Enhanced with autism-aware parameters
