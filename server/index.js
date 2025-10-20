@@ -322,11 +322,20 @@ app.post('/api/stt', async (req, res) => {
       return res.status(400).json({ error: 'Audio URL is required' });
     }
 
-    // For now, return a mock transcription
-    // In production, you would use Deepgram or Google Speech-to-Text here
-    res.json({ 
-      transcript: 'This is a placeholder transcription',
-      confidence: 0.95
+    // Note: This endpoint is not currently used by the frontend
+    // The app uses Web Speech API directly in the browser for better real-time performance
+    // This endpoint is kept for potential future use with Deepgram/Google Speech-to-Text
+    
+    // If we were to implement this, we would:
+    // 1. Download the audio from the URL
+    // 2. Send it to Deepgram API using the configured DEEPGRAM_API_KEY
+    // 3. Return the actual transcription
+    
+    // For now, return an error indicating this endpoint is not implemented
+    res.status(501).json({ 
+      error: 'Speech-to-text endpoint not implemented',
+      message: 'The application uses Web Speech API in the browser instead',
+      alternative: 'Use the browser\'s built-in speech recognition'
     });
   } catch (error) {
     console.error('STT API error:', error);

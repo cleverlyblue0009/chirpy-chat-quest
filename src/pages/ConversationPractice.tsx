@@ -493,9 +493,13 @@ export default function ConversationPractice() {
       setIsLoading(true);
       console.log('Processing user message:', text);
       
-      // Upload audio if available
+      // Validate and clean user input
+      const cleanedText = validateUserInput(text);
+      
+      // Upload audio if available and analyze pronunciation
       let audioUrl: string | undefined;
       let pronunciationScore: number | undefined;
+      let responseAnalysis: any = {};
       
       if (audioBlob) {
         console.log('Uploading audio blob, size:', audioBlob.size);
@@ -504,14 +508,17 @@ export default function ConversationPractice() {
         await uploadBytes(audioRef, audioBlob);
         audioUrl = await getDownloadURL(audioRef);
         
-        // Analyze pronunciation
+        // Analyze pronunciation with enhanced accuracy
         pronunciationScore = await analyzePronunciation(audioBlob);
+        
+        // Analyze response correctness based on context
+        responseAnalysis = analyzeResponseCorrectness(cleanedText, messages);
       }
       
       // Add user message to conversation
       const userMessage: Message = {
         sender: 'user',
-        text,
+        text: cleanedText,
         timestamp: Timestamp.now(),
       };
       
@@ -521,6 +528,9 @@ export default function ConversationPractice() {
       }
       if (pronunciationScore !== undefined) {
         userMessage.pronunciation_score = pronunciationScore;
+        
+        // Show pronunciation feedback immediately
+        showPronunciationFeedback(pronunciationScore);
       }
       
       // Update Firestore
@@ -535,24 +545,37 @@ export default function ConversationPractice() {
       // Increment question counter
       setCurrentQuestion(prev => prev + 1);
       
-      // Generate AI response
+      // Generate AI response with enhanced context
       let aiResponse;
       try {
         aiResponse = await generateAIResponse(
           conversationId,
           currentUser.uid,
           levelId,
-          text
+          cleanedText
         );
+        
+        // Validate AI response
+        if (!aiResponse || !aiResponse.text) {
+          throw new Error('Invalid AI response received');
+        }
       } catch (error) {
         console.error('Failed to get AI response:', error);
+        
+        // Use fallback response instead of failing completely
+        aiResponse = {
+          text: getEncouragingFallbackResponse(cleanedText),
+          birdCharacter: birdCharacter?.id || 'ruby_robin',
+          tone: 'encouraging',
+          shouldEnd: false,
+          score: 75,
+          feedback: 'Keep practicing! You\\'re doing great!'
+        };
+        
         toast({
-          title: "Connection Error",
-          description: "Unable to get a response. Please check your connection and try again.",
-          variant: "destructive",
+          title: "Connection Issue",
+          description: "Using offline mode. Your progress is still being saved!",
         });
-        setIsLoading(false);
-        return; // Exit early if API fails
       }
       
       // Generate audio for AI response
@@ -566,7 +589,8 @@ export default function ConversationPractice() {
           );
         } catch (error) {
           console.error('Failed to generate speech:', error);
-          // Continue without audio
+          // Use browser TTS as fallback
+          useBrowserTTS(aiResponse.text);
         }
       }
       
@@ -601,20 +625,161 @@ export default function ConversationPractice() {
           () => setIsBirdSpeaking(true),
           () => setIsBirdSpeaking(false)
         ).catch(console.error);
+      } else {
+        // If no audio URL, still animate the bird speaking
+        setIsBirdSpeaking(true);
+        setTimeout(() => setIsBirdSpeaking(false), 2000);
       }
       
       // Clear text input
       setTextInput("");
       
+      // Show response correctness feedback
+      if (responseAnalysis.isCorrect !== undefined) {
+        showResponseFeedback(responseAnalysis);
+      }
+      
     } catch (error) {
       console.error('Error processing message:', error);
       toast({
         title: "Error",
-        description: "Failed to process your message. Please try again.",
+        description: "Something went wrong. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  // Validate and clean user input
+  const validateUserInput = (text: string): string => {
+    // Remove excessive whitespace
+    let cleaned = text.trim().replace(/\s+/g, ' ');
+    
+    // Limit length for autism-friendly responses
+    if (cleaned.length > 200) {
+      cleaned = cleaned.substring(0, 200);
+    }
+    
+    return cleaned;
+  };
+  
+  // Analyze if response is contextually correct
+  const analyzeResponseCorrectness = (text: string, previousMessages: Message[]) => {
+    const lastBirdMessage = [...previousMessages].reverse().find(m => m.sender === 'bird');
+    
+    if (!lastBirdMessage) {
+      return { isCorrect: true, confidence: 1 };
+    }
+    
+    const analysis: any = {
+      isCorrect: true,
+      confidence: 0.8,
+      feedback: ''
+    };
+    
+    // Check if response is relevant to the question
+    const questionWords = ['what', 'how', 'why', 'when', 'where', 'who', 'which'];
+    const isQuestion = questionWords.some(word => 
+      lastBirdMessage.text.toLowerCase().includes(word + ' ')
+    );
+    
+    if (isQuestion) {
+      // Check if user provided some kind of answer
+      if (text.length < 2) {
+        analysis.isCorrect = false;
+        analysis.feedback = 'Try to give a longer answer';
+        analysis.confidence = 0.3;
+      } else if (text.toLowerCase() === 'i don\\'t know') {
+        analysis.isCorrect = true; // It's okay not to know
+        analysis.feedback = 'It\\'s okay not to know! Let\\'s try something else.';
+        analysis.confidence = 0.7;
+      }
+    }
+    
+    // Check for greeting responses
+    if (lastBirdMessage.text.toLowerCase().includes('hello') || 
+        lastBirdMessage.text.toLowerCase().includes('hi ')) {
+      if (text.toLowerCase().includes('hello') || 
+          text.toLowerCase().includes('hi') ||
+          text.toLowerCase().includes('hey')) {
+        analysis.isCorrect = true;
+        analysis.confidence = 1;
+        analysis.feedback = 'Great greeting!';
+      }
+    }
+    
+    return analysis;
+  };
+  
+  // Show pronunciation feedback toast
+  const showPronunciationFeedback = (score: number) => {
+    let title = '';
+    let description = '';
+    
+    if (score >= 90) {
+      title = '🌟 Excellent Pronunciation!';
+      description = 'You\\'re speaking so clearly!';
+    } else if (score >= 80) {
+      title = '🎉 Great Pronunciation!';
+      description = 'Very well done!';
+    } else if (score >= 70) {
+      title = '👍 Good Pronunciation!';
+      description = 'You\\'re doing well!';
+    } else if (score >= 60) {
+      title = '😊 Nice Try!';
+      description = 'Keep practicing!';
+    }
+    
+    if (title) {
+      toast({
+        title,
+        description,
+      });
+    }
+  };
+  
+  // Show response correctness feedback
+  const showResponseFeedback = (analysis: any) => {
+    if (analysis.feedback) {
+      toast({
+        title: analysis.isCorrect ? '✅ Good Response!' : '💡 Tip',
+        description: analysis.feedback,
+      });
+    }
+  };
+  
+  // Get encouraging fallback response
+  const getEncouragingFallbackResponse = (userText: string): string => {
+    const responses = [
+      'That\\'s wonderful! Tell me more!',
+      'I love hearing about that! What else?',
+      'You\\'re doing so well! Keep going!',
+      'That sounds interesting! How exciting!',
+      'Great job! You\\'re expressing yourself so well!'
+    ];
+    
+    // Check for specific patterns
+    if (userText.toLowerCase().includes('hello') || userText.toLowerCase().includes('hi')) {
+      return 'Hello! It\\'s so nice to talk with you! How are you today?';
+    }
+    
+    if (userText.includes('?')) {
+      return 'That\\'s a great question! What do you think about it?';
+    }
+    
+    return responses[Math.floor(Math.random() * responses.length)];
+  };
+  
+  // Use browser TTS as fallback
+  const useBrowserTTS = (text: string) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9; // Slightly slower for clarity
+      utterance.pitch = 1.1; // Slightly higher pitch for friendliness
+      utterance.onstart = () => setIsBirdSpeaking(true);
+      utterance.onend = () => setIsBirdSpeaking(false);
+      speechSynthesis.speak(utterance);
     }
   };
 

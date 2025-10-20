@@ -10,7 +10,8 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retries: number = 2
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     
@@ -20,22 +21,65 @@ class ApiClient {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+      // Add timeout using AbortController
+      signal: AbortSignal.timeout(15000), // 15 second timeout
     };
 
-    try {
-      const response = await fetch(url, config);
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const response = await fetch(url, config);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`API Error: ${response.status} ${response.statusText}`, errorText);
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => 'No error details');
+          console.error(`API Error (attempt ${attempt + 1}): ${response.status} ${response.statusText}`, errorText);
+          
+          // Don't retry on client errors (4xx)
+          if (response.status >= 400 && response.status < 500) {
+            throw new Error(`API Error: ${response.status} ${response.statusText}`);
+          }
+          
+          // Retry on server errors (5xx)
+          if (attempt < retries && response.status >= 500) {
+            console.log(`Retrying request to ${endpoint} (attempt ${attempt + 2}/${retries + 1})`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1))); // Exponential backoff
+            continue;
+          }
+          
+          throw new Error(`API Error: ${response.status} ${response.statusText}`);
+        }
+
+        return response.json();
+      } catch (error: any) {
+        // Handle timeout errors
+        if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+          console.error(`Request timeout for ${endpoint} (attempt ${attempt + 1})`);
+          if (attempt < retries) {
+            console.log(`Retrying after timeout (attempt ${attempt + 2}/${retries + 1})`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+            continue;
+          }
+          throw new Error('Request timeout - please check your connection');
+        }
+        
+        // Handle network errors
+        if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
+          console.error(`Network error for ${endpoint} (attempt ${attempt + 1})`);
+          if (attempt < retries) {
+            console.log(`Retrying after network error (attempt ${attempt + 2}/${retries + 1})`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+            continue;
+          }
+          throw new Error('Network error - please check your connection');
+        }
+        
+        console.error('Request failed:', endpoint, error);
+        
+        // Don't retry on other errors
+        throw error;
       }
-
-      return response.json();
-    } catch (error) {
-      console.error('Request failed:', endpoint, error);
-      throw error;
     }
+    
+    throw new Error('Max retries exceeded');
   }
 
   // Chat API - Enhanced with autism-aware parameters
@@ -46,11 +90,22 @@ class ApiClient {
     userMessage: string;
     systemPrompt?: string;
     analysisData?: any;
-  }) {
-    return this.request('/api/chat', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+  }): Promise<any> {
+    try {
+      return await this.request('/api/chat', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }, 1); // Fewer retries for chat to avoid long waits
+    } catch (error) {
+      console.error('Chat API failed:', error);
+      // Return a fallback structure instead of throwing
+      return {
+        response: null,
+        text: null,
+        error: true,
+        fallback: true
+      };
+    }
   }
 
   // Text-to-Speech API
