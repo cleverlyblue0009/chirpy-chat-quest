@@ -96,12 +96,23 @@ export default function ConversationPractice() {
     };
     
     if (checkSpeechRecognitionSupport()) {
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-US';
-      recognitionRef.current.maxAlternatives = 3;
+      try {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = true;
+        recognitionRef.current.lang = 'en-US';
+        recognitionRef.current.maxAlternatives = 3;
+        console.log('Speech recognition initialized successfully');
+      } catch (error) {
+        console.error('Error initializing speech recognition:', error);
+        setUseTextInput(true);
+        toast({
+          title: "Initialization Error",
+          description: "Could not initialize speech recognition. Using text input instead.",
+          variant: "destructive",
+        });
+      }
       
       // Test microphone permission on component mount
       navigator.mediaDevices.getUserMedia({ audio: true })
@@ -175,12 +186,16 @@ export default function ConversationPractice() {
         const audioUrl = await generateSpeech(greeting, birdCharacter.id, conversationRef.id);
         
         // Add initial message
-        const initialMessage: Message = {
-          sender: 'bird',
-          text: greeting,
-          timestamp: Timestamp.now(),
-          audio_url: audioUrl,
-        };
+      const initialMessage: Message = {
+        sender: 'bird',
+        text: greeting,
+        timestamp: Timestamp.now(),
+      };
+      
+      // Only add audio_url if it exists
+      if (audioUrl) {
+        initialMessage.audio_url = audioUrl;
+      }
         
         await updateDoc(conversationRef, {
           messages: [initialMessage]
@@ -248,6 +263,8 @@ export default function ConversationPractice() {
         return;
       }
       
+      console.log('Starting recording process...');
+      
       // Get microphone access with error handling
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
@@ -257,6 +274,7 @@ export default function ConversationPractice() {
         }
       });
       streamRef.current = stream;
+      console.log('Got media stream:', stream.getAudioTracks().length, 'audio tracks');
       
       // Start MediaRecorder for audio recording
       mediaRecorderRef.current = new MediaRecorder(stream);
@@ -265,11 +283,13 @@ export default function ConversationPractice() {
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+          console.log('Audio chunk received:', event.data.size, 'bytes');
         }
       };
       
       mediaRecorderRef.current.start();
       setIsRecording(true);
+      console.log('MediaRecorder started');
       
       // Start speech recognition
       if (recognitionRef.current && !useTextInput) {
@@ -378,11 +398,16 @@ export default function ConversationPractice() {
   // Stop recording and process audio
   const stopRecording = async (transcript?: string) => {
     try {
+      console.log('Stopping recording, transcript:', transcript);
       setIsRecording(false);
       
       // Stop speech recognition
       if (recognitionRef.current) {
-        recognitionRef.current.stop();
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.log('Recognition already stopped');
+        }
       }
       
       // Stop media recorder and get audio blob
@@ -396,7 +421,12 @@ export default function ConversationPractice() {
           }
         });
         
-        audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (audioChunksRef.current.length > 0) {
+          audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          console.log('Created audio blob:', audioBlob.size, 'bytes');
+        } else {
+          console.log('No audio chunks available');
+        }
       }
       
       // Stop all tracks
@@ -416,8 +446,9 @@ export default function ConversationPractice() {
       }
       
       // Process the user's message
-      if (transcript) {
-        await processUserMessage(transcript, audioBlob);
+      if (transcript && transcript.trim()) {
+        console.log('Processing message with transcript:', transcript);
+        await processUserMessage(transcript.trim(), audioBlob || undefined);
       }
     } catch (error) {
       console.error('Error stopping recording:', error);
@@ -430,17 +461,26 @@ export default function ConversationPractice() {
   };
 
   // Process user message
-  const processUserMessage = async (text: string, audioBlob: Blob | null = null) => {
-    if (!currentUser || !conversationId || !text.trim()) return;
+  const processUserMessage = async (text: string, audioBlob?: Blob) => {
+    if (!currentUser || !conversationId || !text.trim()) {
+      console.log('Missing required data for processing message:', {
+        currentUser: !!currentUser,
+        conversationId: !!conversationId,
+        text: text.trim()
+      });
+      return;
+    }
     
     try {
       setIsLoading(true);
+      console.log('Processing user message:', text);
       
       // Upload audio if available
       let audioUrl: string | undefined;
       let pronunciationScore: number | undefined;
       
       if (audioBlob) {
+        console.log('Uploading audio blob, size:', audioBlob.size);
         const timestamp = Date.now();
         const audioRef = ref(storage, `audio/user_recordings/${currentUser.uid}/${timestamp}.webm`);
         await uploadBytes(audioRef, audioBlob);
@@ -455,9 +495,15 @@ export default function ConversationPractice() {
         sender: 'user',
         text,
         timestamp: Timestamp.now(),
-        audio_url: audioUrl,
-        pronunciation_score: pronunciationScore,
       };
+      
+      // Only add optional fields if they have values
+      if (audioUrl) {
+        userMessage.audio_url = audioUrl;
+      }
+      if (pronunciationScore !== undefined) {
+        userMessage.pronunciation_score = pronunciationScore;
+      }
       
       // Update Firestore
       const conversationRef = doc(db, 'conversations', conversationId);
@@ -492,10 +538,14 @@ export default function ConversationPractice() {
       // Add bird response to conversation
       const birdMessage: Message = {
         sender: 'bird',
-        text: aiResponse.text,
+        text: aiResponse.text || "I'm having trouble understanding. Can you try again?",
         timestamp: Timestamp.now(),
-        audio_url: responseAudioUrl,
       };
+      
+      // Only add audio_url if it exists
+      if (responseAudioUrl) {
+        birdMessage.audio_url = responseAudioUrl;
+      }
       
       const updatedMessages = [...currentMessages, userMessage, birdMessage];
       

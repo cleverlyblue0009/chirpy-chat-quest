@@ -63,12 +63,12 @@ export async function generateAIResponse(
     });
     
     return {
-      text: response.text || response.response,
-      birdCharacter: response.birdCharacter,
-      tone: response.tone,
-      shouldEnd: response.shouldEnd,
-      score: response.score,
-      feedback: response.feedback
+      text: response.text || response.response || "That's interesting! Tell me more.",
+      birdCharacter: response.birdCharacter || context.birdCharacter || 'ruby_robin',
+      tone: response.tone || 'encouraging',
+      shouldEnd: response.shouldEnd || false,
+      score: response.score || 75,
+      feedback: response.feedback || 'Keep practicing! You\'re doing great!'
     };
   } catch (error) {
     console.error('Error generating AI response:', error);
