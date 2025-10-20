@@ -69,17 +69,56 @@ export default function ConversationPractice() {
 
   // Initialize Web Speech API
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+    // Check browser compatibility
+    const checkSpeechRecognitionSupport = () => {
+      if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        console.log('Speech recognition not supported in this browser');
+        toast({
+          title: "Browser compatibility",
+          description: "Speech recognition is not supported in your browser. Using text input instead.",
+        });
+        setUseTextInput(true);
+        return false;
+      }
+      
+      // Check if we're on HTTPS (required for speech recognition)
+      if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+        console.log('Speech recognition requires HTTPS');
+        toast({
+          title: "Secure connection required",
+          description: "Speech recognition requires a secure (HTTPS) connection. Using text input instead.",
+        });
+        setUseTextInput(true);
+        return false;
+      }
+      
+      return true;
+    };
+    
+    if (checkSpeechRecognitionSupport()) {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = true;
       recognitionRef.current.lang = 'en-US';
-    } else {
-      console.log('Speech recognition not supported, falling back to text input');
-      setUseTextInput(true);
+      recognitionRef.current.maxAlternatives = 3;
+      
+      // Test microphone permission on component mount
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          // Permission granted, stop the stream immediately
+          stream.getTracks().forEach(track => track.stop());
+          console.log('Microphone permission granted');
+        })
+        .catch(err => {
+          console.log('Microphone permission denied or not available:', err);
+          toast({
+            title: "Microphone access",
+            description: "Please allow microphone access when prompted, or use text input instead.",
+          });
+        });
     }
-  }, []);
+  }, [toast]);
 
   // Load level and bird character data
   useEffect(() => {
@@ -203,8 +242,20 @@ export default function ConversationPractice() {
   // Start recording audio
   const startRecording = async () => {
     try {
-      // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Check if already recording
+      if (isRecording) {
+        console.log('Already recording');
+        return;
+      }
+      
+      // Get microphone access with error handling
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
       streamRef.current = stream;
       
       // Start MediaRecorder for audio recording
@@ -222,19 +273,87 @@ export default function ConversationPractice() {
       
       // Start speech recognition
       if (recognitionRef.current && !useTextInput) {
+        let speechTimeout: NodeJS.Timeout;
+        let hasSpokenSomething = false;
+        
+        recognitionRef.current.onstart = () => {
+          console.log('Speech recognition started');
+          // Set a timeout for no speech detection
+          speechTimeout = setTimeout(() => {
+            if (!hasSpokenSomething) {
+              toast({
+                title: "Waiting for speech...",
+                description: "Please speak clearly into your microphone.",
+              });
+            }
+          }, 3000);
+        };
+        
+        recognitionRef.current.onspeechstart = () => {
+          console.log('Speech detected');
+          hasSpokenSomething = true;
+          if (speechTimeout) clearTimeout(speechTimeout);
+        };
+        
         recognitionRef.current.onresult = (event: any) => {
           const transcript = Array.from(event.results)
             .map((result: any) => result[0].transcript)
             .join('');
           
+          console.log('Transcript:', transcript);
+          
           if (event.results[event.results.length - 1].isFinal) {
+            if (speechTimeout) clearTimeout(speechTimeout);
             stopRecording(transcript);
           }
         };
         
+        recognitionRef.current.onnomatch = () => {
+          console.log('No speech match found');
+          toast({
+            title: "Couldn't understand",
+            description: "Please try speaking more clearly.",
+          });
+        };
+        
+        recognitionRef.current.onend = () => {
+          console.log('Speech recognition ended');
+          if (speechTimeout) clearTimeout(speechTimeout);
+        };
+        
         recognitionRef.current.onerror = (event: any) => {
           console.error('Speech recognition error:', event.error);
-          setUseTextInput(true);
+          
+          // Handle different error types
+          if (event.error === 'no-speech') {
+            toast({
+              title: "No speech detected",
+              description: "Please try speaking clearly or use text input instead.",
+            });
+          } else if (event.error === 'audio-capture') {
+            toast({
+              title: "Microphone error",
+              description: "Could not access your microphone. Please check permissions.",
+              variant: "destructive",
+            });
+          } else if (event.error === 'not-allowed') {
+            toast({
+              title: "Permission denied",
+              description: "Microphone access was denied. Please allow microphone access.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Recognition error",
+              description: `Speech recognition failed: ${event.error}`,
+              variant: "destructive",
+            });
+          }
+          
+          // Only switch to text input for critical errors
+          if (event.error !== 'no-speech') {
+            setUseTextInput(true);
+          }
           stopRecording();
         };
         

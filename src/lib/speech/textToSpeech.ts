@@ -20,12 +20,44 @@ export async function generateSpeech(
       conversationId,
     });
     
-    return response.audioUrl;
+    // Check if we should use browser TTS as fallback
+    if (response.useBrowserTTS && 'speechSynthesis' in window) {
+      // Use browser's text-to-speech as fallback
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      utterance.pitch = 1.1;
+      utterance.volume = 1.0;
+      
+      // Try to select a child-friendly voice
+      const voices = window.speechSynthesis.getVoices();
+      const preferredVoice = voices.find(voice => 
+        voice.name.includes('Female') || 
+        voice.name.includes('Samantha') ||
+        voice.name.includes('Victoria')
+      );
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+      
+      // Return a special marker for browser TTS
+      return 'browser-tts:' + text;
+    }
+    
+    // If we have a server URL, prepend the base URL if it's relative
+    if (response.audioUrl && response.audioUrl.startsWith('/')) {
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      return baseUrl + response.audioUrl;
+    }
+    
+    return response.audioUrl || '';
   } catch (error) {
     console.error('Error generating speech:', error);
     
-    // Fallback: return empty string if TTS fails
-    // In production, you might want to have a pre-recorded fallback
+    // Fallback: use browser TTS if available
+    if ('speechSynthesis' in window) {
+      return 'browser-tts:' + text;
+    }
+    
     return '';
   }
 }
@@ -51,7 +83,62 @@ export async function playAudioWithAnimation(
   onStart?: () => void,
   onEnd?: () => void
 ): Promise<void> {
+  // Check if this is browser TTS
+  if (audioUrl.startsWith('browser-tts:')) {
+    const text = audioUrl.substring('browser-tts:'.length);
+    
+    return new Promise((resolve, reject) => {
+      if (!('speechSynthesis' in window)) {
+        console.error('Browser TTS not supported');
+        onEnd?.();
+        reject(new Error('Browser TTS not supported'));
+        return;
+      }
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      utterance.pitch = 1.1;
+      utterance.volume = 1.0;
+      
+      // Try to select a child-friendly voice
+      const voices = window.speechSynthesis.getVoices();
+      const preferredVoice = voices.find(voice => 
+        voice.name.includes('Female') || 
+        voice.name.includes('Samantha') ||
+        voice.name.includes('Victoria')
+      );
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+      
+      utterance.onstart = () => {
+        onStart?.();
+      };
+      
+      utterance.onend = () => {
+        onEnd?.();
+        resolve();
+      };
+      
+      utterance.onerror = (error) => {
+        console.error('Browser TTS error:', error);
+        onEnd?.();
+        reject(error);
+      };
+      
+      window.speechSynthesis.speak(utterance);
+    });
+  }
+  
+  // Regular audio file playback
   return new Promise((resolve, reject) => {
+    if (!audioUrl) {
+      console.error('No audio URL provided');
+      onEnd?.();
+      resolve();
+      return;
+    }
+    
     const audio = new Audio(audioUrl);
     
     audio.addEventListener('play', () => {

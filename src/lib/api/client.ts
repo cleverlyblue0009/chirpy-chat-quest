@@ -51,7 +51,7 @@ class ApiClient {
     text: string;
     birdCharacter?: string;
     conversationId?: string;
-  }): Promise<{ audioUrl: string }> {
+  }): Promise<{ audioUrl: string; useBrowserTTS?: boolean; text?: string }> {
     return this.request('/api/tts', {
       method: 'POST',
       body: JSON.stringify(data),
