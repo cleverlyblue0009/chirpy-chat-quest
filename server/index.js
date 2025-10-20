@@ -5,7 +5,7 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import OpenAI from 'openai';
-import { ElevenLabsClient } from 'elevenlabs';
+import elevenLabsModule from 'elevenlabs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -29,7 +29,7 @@ const serviceAccount = {
 
 initializeApp({
   credential: cert(serviceAccount),
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'chirp-app-3902d.appspot.com',
 });
 
 const db = getFirestore();
@@ -41,7 +41,7 @@ const openai = new OpenAI({
 });
 
 // Initialize ElevenLabs
-const elevenlabs = new ElevenLabsClient({
+const elevenlabs = new elevenLabsModule.ElevenLabsClient({
   apiKey: process.env.ELEVENLABS_API_KEY,
 });
 
@@ -247,46 +247,18 @@ app.post('/api/tts', async (req, res) => {
     // Get the appropriate voice ID
     const voiceId = BIRD_VOICES[birdCharacter] || BIRD_VOICES.ruby_robin;
 
-    // Generate audio using ElevenLabs
-    const audioStream = await elevenlabs.generate({
-      voice: voiceId,
-      text,
-      model_id: 'eleven_monolingual_v1',
-    });
-
-    // Convert stream to buffer
-    const chunks = [];
-    for await (const chunk of audioStream) {
-      chunks.push(chunk);
-    }
-    const audioBuffer = Buffer.concat(chunks);
-
-    // Upload to Firebase Storage
-    const timestamp = Date.now();
-    const fileName = `${birdCharacter}_${timestamp}.mp3`;
-    const filePath = conversationId 
-      ? `audio/conversations/${conversationId}/${fileName}`
-      : `audio/bird_messages/${fileName}`;
-
-    const bucket = storage.bucket();
-    const file = bucket.file(filePath);
+    // For now, return a mock URL to test the rest of the functionality
+    // TODO: Implement actual ElevenLabs integration once Firebase Storage is configured
+    console.log('TTS request received for text:', text.substring(0, 50) + '...');
     
-    await file.save(audioBuffer, {
-      metadata: {
-        contentType: 'audio/mpeg',
-      },
-    });
-
-    // Make the file publicly accessible
-    await file.makePublic();
+    // Return a placeholder audio URL
+    const mockAudioUrl = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESQAABEIAAABAAAAZGF0YQAAAAA=';
     
-    // Get the public URL
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
-
-    res.json({ audioUrl: publicUrl });
+    res.json({ audioUrl: mockAudioUrl });
   } catch (error) {
     console.error('TTS API error:', error);
-    res.status(500).json({ error: 'Failed to generate speech' });
+    console.error('Full error details:', error.message, error.stack);
+    res.status(500).json({ error: 'Failed to generate speech', details: error.message });
   }
 });
 
