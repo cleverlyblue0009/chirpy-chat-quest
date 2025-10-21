@@ -569,7 +569,7 @@ export default function ConversationPractice() {
           tone: 'encouraging',
           shouldEnd: false,
           score: 75,
-          feedback: 'Keep practicing! You\\'re doing great!'
+          feedback: "Keep practicing! You're doing great!"
         };
         
         toast({
@@ -690,9 +690,9 @@ export default function ConversationPractice() {
         analysis.isCorrect = false;
         analysis.feedback = 'Try to give a longer answer';
         analysis.confidence = 0.3;
-      } else if (text.toLowerCase() === 'i don\\'t know') {
+      } else if (text.toLowerCase() === "i don't know") {
         analysis.isCorrect = true; // It's okay not to know
-        analysis.feedback = 'It\\'s okay not to know! Let\\'s try something else.';
+        analysis.feedback = "It's okay not to know! Let's try something else.";
         analysis.confidence = 0.7;
       }
     }
@@ -719,13 +719,13 @@ export default function ConversationPractice() {
     
     if (score >= 90) {
       title = '🌟 Excellent Pronunciation!';
-      description = 'You\\'re speaking so clearly!';
+      description = "You're speaking so clearly!";
     } else if (score >= 80) {
       title = '🎉 Great Pronunciation!';
       description = 'Very well done!';
     } else if (score >= 70) {
       title = '👍 Good Pronunciation!';
-      description = 'You\\'re doing well!';
+      description = "You're doing well!";
     } else if (score >= 60) {
       title = '😊 Nice Try!';
       description = 'Keep practicing!';
@@ -752,20 +752,20 @@ export default function ConversationPractice() {
   // Get encouraging fallback response
   const getEncouragingFallbackResponse = (userText: string): string => {
     const responses = [
-      'That\\'s wonderful! Tell me more!',
+      "That's wonderful! Tell me more!",
       'I love hearing about that! What else?',
-      'You\\'re doing so well! Keep going!',
+      "You're doing so well! Keep going!",
       'That sounds interesting! How exciting!',
-      'Great job! You\\'re expressing yourself so well!'
+      "Great job! You're expressing yourself so well!"
     ];
     
     // Check for specific patterns
     if (userText.toLowerCase().includes('hello') || userText.toLowerCase().includes('hi')) {
-      return 'Hello! It\\'s so nice to talk with you! How are you today?';
+      return "Hello! It's so nice to talk with you! How are you today?";
     }
     
     if (userText.includes('?')) {
-      return 'That\\'s a great question! What do you think about it?';
+      return "That's a great question! What do you think about it?";
     }
     
     return responses[Math.floor(Math.random() * responses.length)];
