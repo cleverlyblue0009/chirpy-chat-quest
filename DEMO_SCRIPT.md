@@ -29,7 +29,7 @@ What makes Chirp unique is that it combines evidence-based therapeutic framework
 **Script**:
 "The system uses a modern tech stack with React and TypeScript on the frontend, Node.js backend with Express, and Firebase for real-time data synchronization. 
 
-The AI conversation engine uses OpenAI's GPT-4 with carefully crafted, autism-aware prompts for each bird character. We also integrate ElevenLabs for natural text-to-speech and the Web Speech API for voice recognition."
+The AI conversation engine uses Google's Gemini with carefully crafted, autism-aware prompts for each bird character. We also integrate ElevenLabs for natural text-to-speech and the Web Speech API for voice recognition."
 
 **Highlight**:
 - Real-time synchronization across devices

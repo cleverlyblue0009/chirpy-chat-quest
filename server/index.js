@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import elevenLabsModule from 'elevenlabs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -42,10 +42,8 @@ initializeApp({
 const db = getFirestore();
 const storage = getStorage();
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Initialize Google Generative AI (Gemini)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Initialize ElevenLabs
 const elevenlabs = new elevenLabsModule.ElevenLabsClient({
@@ -91,10 +89,10 @@ app.post('/api/chat', async (req, res) => {
     const conversationDoc = await db.collection('conversations').doc(conversationId).get();
     const conversation = conversationDoc.exists ? conversationDoc.data() : { messages: [] };
     
-    // Build conversation context for OpenAI
+    // Build conversation context for Gemini
     const conversationHistory = conversation.messages.map(msg => ({
-      role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: msg.text,
+      role: msg.sender === 'user' ? 'user' : 'model',
+      parts: [{ text: msg.text }],
     }));
 
     // Determine if conversation should end
@@ -123,21 +121,35 @@ app.post('/api/chat', async (req, res) => {
       ${analysisData?.engagement_level === 'high' ? '- Child is highly engaged! Match their enthusiasm!' : ''}
     `;
 
-    // Generate response using OpenAI with enhanced parameters
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
-      messages: [
-        { role: 'system', content: enhancedSystemPrompt },
-        ...conversationHistory,
-        { role: 'user', content: userMessage }
-      ],
-      temperature: 0.7,
-      max_tokens: 100, // Shorter for clearer responses
-      presence_penalty: 0.1, // Encourage variety
-      frequency_penalty: 0.1, // Avoid repetition
+    // Initialize the Gemini model
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 100, // Shorter for clearer responses
+        topP: 0.95,
+        topK: 40,
+      }
     });
 
-    const aiResponse = completion.choices[0].message.content;
+    // Create chat history for Gemini including system prompt
+    const chat = model.startChat({
+      history: [
+        {
+          role: "user",
+          parts: [{ text: "System Instructions: " + enhancedSystemPrompt }],
+        },
+        {
+          role: "model",
+          parts: [{ text: "I understand. I will follow these instructions and help the child practice their communication skills in an autism-aware way." }],
+        },
+        ...conversationHistory
+      ],
+    });
+
+    // Generate response using Gemini
+    const result = await chat.sendMessage(userMessage);
+    const aiResponse = result.response.text();
 
     // Calculate autism-aware scores (always encouraging)
     const scores = {

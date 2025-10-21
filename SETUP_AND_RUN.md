@@ -117,7 +117,7 @@ Test these specialized features:
 ### API Keys Verification
 Ensure these are properly configured in `/workspace/server/.env`:
 ```
-OPENAI_API_KEY=<your-key>
+GEMINI_API_KEY=<your-key>
 ELEVENLABS_API_KEY=<your-key>
 ```
 
@@ -150,8 +150,8 @@ ELEVENLABS_API_KEY=<your-key>
 
 ## 🐛 Troubleshooting
 
-### Issue: "Cannot find OpenAI API key"
-**Solution**: Ensure OPENAI_API_KEY is in `/workspace/server/.env`
+### Issue: "Cannot find Gemini API key"
+**Solution**: Ensure GEMINI_API_KEY is in `/workspace/server/.env`
 
 ### Issue: Microphone not working
 **Solution**: 

@@ -116,7 +116,7 @@ Audio files are stored in `/workspace/public/audio/` with format:
 
 1. **Firebase Configuration**: Set up proper Firebase Storage bucket for cloud storage
 2. **Database Integration**: Configure Firebase Firestore for conversation storage
-3. **OpenAI Integration**: Set up GPT-4 for conversation responses
+3. **Gemini Integration**: Set up Google Gemini for conversation responses
 4. **User Authentication**: Implement Firebase Auth for user management
 
 ---
