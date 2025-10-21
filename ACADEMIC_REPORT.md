@@ -98,7 +98,7 @@ Unlike traditional social skills training that may seek to "normalize" autistic 
 ┌────────────────▼────────────────────────┐
 │         Backend API (Node.js)           │
 │  - Express.js server                    │
-│  - OpenAI GPT-4 integration             │
+│  - Google Gemini integration             │
 │  - ElevenLabs TTS                       │
 │  - Session management                   │
 └────────────────┬────────────────────────┘
@@ -115,7 +115,7 @@ Unlike traditional social skills training that may seek to "normalize" autistic 
 ### 3.2 Key Technologies
 - **Frontend**: React 18, TypeScript, Tailwind CSS, Shadcn/ui components
 - **Backend**: Node.js, Express, Firebase Admin SDK
-- **AI/ML**: OpenAI GPT-4 Turbo, Web Speech API, ElevenLabs TTS
+- **AI/ML**: Google Gemini, Web Speech API, ElevenLabs TTS
 - **Database**: Firebase Firestore (NoSQL), Firebase Storage
 - **Authentication**: Firebase Auth
 - **Deployment**: Vercel (frontend), Google Cloud Run (backend)
@@ -321,7 +321,7 @@ def generate_feedback(performance_metrics):
 ### 8.2 API Integrations
 | Service | Purpose | Fallback Strategy |
 |---------|---------|-------------------|
-| OpenAI GPT-4 | Conversation generation | Scripted responses |
+| Google Gemini | Conversation generation | Scripted responses |
 | ElevenLabs | Text-to-speech | Browser TTS API |
 | Web Speech API | Speech recognition | Text input option |
 | Firebase | Backend infrastructure | Local storage cache |

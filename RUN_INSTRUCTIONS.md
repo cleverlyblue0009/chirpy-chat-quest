@@ -31,7 +31,7 @@ FIREBASE_ADMIN_CLIENT_EMAIL=firebase-adminsdk@your-project.iam.gserviceaccount.c
 FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 
 # API Keys
-OPENAI_API_KEY=sk-your-openai-key
+GEMINI_API_KEY=your-gemini-api-key
 ELEVENLABS_API_KEY=your-elevenlabs-key
 ```
 
@@ -133,7 +133,7 @@ npm run dev
 - Basic pronunciation scoring
 
 ✅ **AI Conversations:**
-- OpenAI GPT-4 generates contextual responses
+- Google Gemini generates contextual responses
 - Bird personalities based on character
 - Progressive difficulty based on level
 - Real-time scoring and feedback
@@ -173,7 +173,7 @@ npm run dev
 - Ensure user is authenticated
 - Verify Firebase project configuration
 
-### "OpenAI/ElevenLabs not working"
+### "Gemini/ElevenLabs not working"
 - Check API keys in .env.local
 - Ensure you have credits/quota
 - Check backend server logs for errors
@@ -191,7 +191,7 @@ Frontend (Vite React)
 API Client (src/lib/api/client.ts)
     ↓
 Backend Server (Express on port 3001)
-    ├── OpenAI API (chat responses)
+    ├── Google Gemini API (chat responses)
     ├── ElevenLabs API (text-to-speech)
     └── Firebase Admin SDK
     

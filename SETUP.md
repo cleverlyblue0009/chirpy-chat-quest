@@ -4,7 +4,7 @@
 
 1. Node.js and npm installed
 2. Firebase account (create one at https://firebase.google.com)
-3. OpenAI API key (get from https://platform.openai.com)
+3. Gemini API key (get from https://aistudio.google.com/app/apikey)
 4. ElevenLabs API key (get from https://elevenlabs.io)
 
 ## Step 1: Create Firebase Project
@@ -63,7 +63,7 @@
 
 3. Add your API keys:
    ```
-   VITE_OPENAI_API_KEY=sk-your_openai_key
+   # VITE_GEMINI_API_KEY=your_gemini_key (no longer needed in frontend)
    VITE_ELEVENLABS_API_KEY=your_elevenlabs_key
    ```
 
@@ -144,7 +144,7 @@ Some queries require indexes. Firebase will prompt you to create them when neede
 ### API Issues
 - Verify API keys are correct
 - Check API quotas and limits
-- For OpenAI/ElevenLabs, ensure accounts have credits
+- For Gemini/ElevenLabs, ensure accounts have credits or free tier access
 
 ## Production Deployment
 
@@ -170,7 +170,7 @@ Some queries require indexes. Firebase will prompt you to create them when neede
 ## Security Best Practices
 
 1. **Never expose sensitive keys in client code**
-   - Move OpenAI calls to Cloud Functions if possible
+   - Move Gemini calls to Cloud Functions if possible
    - Use Firebase App Check for additional security
 
 2. **Implement rate limiting**
