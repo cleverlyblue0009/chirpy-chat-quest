@@ -23,13 +23,15 @@ interface AIResponse {
  * @param messages Previous messages in the conversation
  * @param levelId The current level ID
  * @param userMessage The user's latest message
+ * @param emotionContext Optional emotion context from facial detection
  * @returns AI-generated response
  */
 export async function generateAIResponse(
   conversationId: string,
   userId: string,
   levelId: string,
-  userMessage: string
+  userMessage: string,
+  emotionContext?: any
 ): Promise<AIResponse> {
   try {
     // Use enhanced adaptive response generation
@@ -60,13 +62,14 @@ export async function generateAIResponse(
     const analysis = analyzeChildResponse(userMessage, context);
     
     try {
-      // Call backend API with enhanced context
+      // Call backend API with enhanced context including emotion data
       const response = await apiClient.sendChatMessage({
         conversationId,
         userId,
         levelId,
         userMessage,
-        analysisData: analysis
+        analysisData: analysis,
+        emotionContext
       });
       
       // Ensure we have valid response data from API

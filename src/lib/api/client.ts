@@ -82,7 +82,7 @@ class ApiClient {
     throw new Error('Max retries exceeded');
   }
 
-  // Chat API - Enhanced with autism-aware parameters
+  // Chat API - Enhanced with autism-aware parameters and emotion context
   async sendChatMessage(data: {
     conversationId: string;
     userId: string;
@@ -90,6 +90,7 @@ class ApiClient {
     userMessage: string;
     systemPrompt?: string;
     analysisData?: any;
+    emotionContext?: any;
   }): Promise<any> {
     try {
       return await this.request('/api/chat', {

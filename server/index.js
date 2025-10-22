@@ -65,7 +65,7 @@ const BIRD_VOICES = {
 // ======================
 app.post('/api/chat', async (req, res) => {
   try {
-    const { conversationId, userId, levelId, userMessage, systemPrompt, analysisData } = req.body;
+    const { conversationId, userId, levelId, userMessage, systemPrompt, analysisData, emotionContext } = req.body;
 
     if (!conversationId || !userId || !levelId || !userMessage) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -101,13 +101,45 @@ app.post('/api/chat', async (req, res) => {
 
     // Use provided system prompt or create enhanced default
     const enhancedSystemPrompt = systemPrompt || `
+      You are ${birdCharacter.name}, ${birdCharacter.personality}.
+      
       ${birdCharacter.system_prompt}
       
-      You are helping an autistic child aged 6-14 practice: ${level.objectives ? level.objectives.join(', ') : level.conversation_topics.join(', ')}.
-      Level: ${level.name} - ${level.description}
+      Current lesson: ${level.name} - ${level.description}
+      Topics: ${level.conversation_topics?.join(', ') || 'conversation skills'}
       
-      Autism-Aware Guidelines:
-      - Keep responses short (2-3 sentences maximum, under 50 words)
+      CRITICAL RESPONSE RULES:
+      1. NEVER say "Yes, I can help with that" or similar acknowledgments without immediately providing the help
+      2. ALWAYS give complete, actionable responses in one message
+      3. If child asks for help: provide the help IMMEDIATELY in your response
+      4. If child asks a question: answer it FULLY in your response
+      5. NEVER end with just acknowledgment - always include substance
+      
+      RESPONSE STRUCTURE (follow this):
+      - If child needs help: Give specific help + encouraging note + follow-up question
+      - If child asks question: Answer completely + relate to lesson + ask if they want to try
+      - If child responds: Validate + build on their response + guide to next step
+      
+      LENGTH REQUIREMENTS:
+      - Minimum 2 complete sentences with substance
+      - Maximum 4 sentences (under 50 words total)
+      - Never just one sentence acknowledgments
+      - Always end with a question or invitation to continue
+      
+      Example BAD response (NEVER do this):
+      "Yes, I can help you with that."
+      
+      Example GOOD responses (ALWAYS do this):
+      "I'd love to help! When you meet someone new, you can smile and say 'Hi, my name is [your name].' That's a great way to start! Would you like to try saying that with me?"
+      
+      "Great question! To greet someone nicely, you can look at them, smile, and say 'Hello' or 'Hi there!' The smile is really important because it shows you're friendly. Can you try giving me a greeting right now?"
+      
+      AUTISM-SPECIFIC GUIDELINES:
+      - Be EXPLICIT and SPECIFIC (no vague responses)
+      - Break complex things into clear steps
+      - Always complete your thought - don't leave them hanging
+      - If you start helping, finish helping in that response
+      - Children with autism may not ask "please continue" - so give full responses
       - Use simple, concrete language (avoid metaphors unless explaining)
       - Be encouraging and positive - celebrate ALL attempts
       - Accept brief responses as valid
@@ -115,20 +147,55 @@ app.post('/api/chat', async (req, res) => {
       - Never pressure for eye contact
       - One question or idea at a time
       - Validate echolalia and special interests
-      - Focus on the learning objectives: ${level.objectives ? level.objectives.join(', ') : level.conversation_topics.join(', ')}
-      ${shouldEnd ? '- This is the last exchange. Wrap up positively, summarize what they did well, and congratulate enthusiastically!' : ''}
-      ${analysisData?.needs_support ? '- Child needs extra support. Simplify language and offer choices.' : ''}
-      ${analysisData?.engagement_level === 'high' ? '- Child is highly engaged! Match their enthusiasm!' : ''}
+      
+      EXAMPLE INTERACTIONS (follow this pattern):
+      
+      Child: "Can you help me say hello?"
+      You: "Of course! When greeting someone, you can smile and say 'Hello!' or 'Hi there!' Try to look at them when you say it - that makes your greeting extra friendly! Would you like to practice with me?"
+      
+      Child: "I don't know what to say."
+      You: "That's okay! Let's practice together. You can start with something simple like 'Hi, how are you?' That's a perfect way to start a conversation. Can you try saying that now?"
+      
+      Child: "How do I introduce myself?"
+      You: "Great question! You can say 'Hi, my name is [your name].' Then you might ask 'What's your name?' That helps you get to know the other person! Want to try it?"
+      
+      ${shouldEnd ? '\nThis is the FINAL exchange. Congratulate them warmly, summarize what they learned, and end positively in a COMPLETE response.' : ''}
+      ${analysisData?.needs_support ? '\nChild needs extra support. Simplify language, offer choices, and be extra encouraging.' : ''}
+      ${analysisData?.engagement_level === 'high' ? '\nChild is highly engaged! Match their enthusiasm!' : ''}
+      
+      ${emotionContext ? `
+      EMOTIONAL CONTEXT (from facial detection):
+      - Current emotion: ${emotionContext.detectedEmotion} 
+      - Engagement level: ${emotionContext.engagementLevel}
+      - Looking at screen: ${emotionContext.isLookingAtScreen ? 'Yes' : 'No'}
+      ${emotionContext.strugglingIndicators?.length > 0 ? `- Struggling indicators: ${emotionContext.strugglingIndicators.join(', ')}` : ''}
+      ${emotionContext.needsSupport ? '- Child needs support - be extra encouraging and simplify!' : ''}
+      
+      RESPONSE GUIDELINES based on emotion:
+      ${emotionContext.detectedEmotion === 'sad' ? '- Be extra gentle and encouraging' : ''}
+      ${emotionContext.detectedEmotion === 'angry' || emotionContext.detectedEmotion === 'disgusted' ? '- Acknowledge frustration, offer simpler approach' : ''}
+      ${emotionContext.detectedEmotion === 'fearful' || emotionContext.detectedEmotion === 'surprised' ? '- Reassure and explain more clearly' : ''}
+      ${emotionContext.detectedEmotion === 'happy' ? '- Match their enthusiasm!' : ''}
+      ${emotionContext.detectedEmotion === 'neutral' && emotionContext.isLookingAtScreen ? '- They are processing - give clear guidance' : ''}
+      ${!emotionContext.isLookingAtScreen ? '- They looked away - check if they need a break' : ''}
+      ${emotionContext.engagementLevel === 'low' ? '- Try to re-engage with excitement or a new approach' : ''}
+      ${emotionContext.strugglingIndicators?.includes('frustration') ? '- Break down the task into smaller steps' : ''}
+      ${emotionContext.strugglingIndicators?.includes('confusion') ? '- Clarify and give examples' : ''}
+      ${emotionContext.strugglingIndicators?.includes('processing') ? '- Give them time, acknowledge their thinking' : ''}
+      ` : ''}
+      
+      Remember: Each response should stand alone as complete and helpful. Never require a follow-up prompt to finish your thought.
     `;
 
     // Initialize the Gemini model
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.0-flash",
       generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 100, // Shorter for clearer responses
+        temperature: 0.8, // Slightly higher for more complete responses
+        maxOutputTokens: 200, // Increased to ensure complete responses
         topP: 0.95,
         topK: 40,
+        stopSequences: [], // Don't use stop sequences that might cut off responses
       }
     });
 
@@ -147,9 +214,86 @@ app.post('/api/chat', async (req, res) => {
       ],
     });
 
+    // Helper function to validate response completeness
+    const validateResponse = (response) => {
+      // Check for incomplete response patterns
+      const incompletePatterns = [
+        /^(yes|sure|okay|alright),?\s*(i can help|let me help|i'll help)/i,
+        /^(yes|sure|okay|of course)[,.!]?\s*$/i, // Very short yes responses
+        /can help you with that\.?$/i,
+        /let me (help|assist) you\.?$/i,
+        /^(i (will|would|can))[,.!]?\s*$/i,
+        /^(certainly|definitely|absolutely)[,.!]?\s*$/i
+      ];
+      
+      const isIncomplete = incompletePatterns.some(pattern => pattern.test(response.trim()));
+      const sentences = response.trim().split(/[.!?]/).filter(s => s.trim().length > 3);
+      const isTooShort = sentences.length < 2;
+      
+      return !isIncomplete && !isTooShort;
+    };
+    
+    // Helper function to get contextual guidance
+    const getContextualGuidance = () => {
+      const topicGuidance = {
+        'greeting': "You can wave and say 'Hi!' or 'Hello!' with a smile. That's a great way to greet someone! Would you like to try?",
+        'introduction': "You can say 'My name is [your name]' and ask 'What's your name?' That helps you get to know someone! Want to practice?",
+        'turn-taking': "In conversations, we take turns - you speak, then I speak, then you speak again. It's like playing catch! Ready to try?",
+        'emotion': "You can share how you feel by saying 'I feel happy' or 'I feel excited!' How are you feeling right now?",
+      };
+      
+      // Check which topic applies based on level conversation topics
+      for (const [topic, guidance] of Object.entries(topicGuidance)) {
+        if (level.conversation_topics?.some(t => t.toLowerCase().includes(topic))) {
+          return guidance;
+        }
+      }
+      
+      return "Keep practicing - you're doing great! Every conversation helps you learn. What would you like to talk about?";
+    };
+
     // Generate response using Gemini
-    const result = await chat.sendMessage(userMessage);
-    const aiResponse = result.response.text();
+    let result = await chat.sendMessage(userMessage);
+    let aiResponse = result.response.text();
+    
+    // Validate and regenerate if incomplete
+    let attempts = 0;
+    while (!validateResponse(aiResponse) && attempts < 2) {
+      console.log('⚠️  Incomplete response detected, regenerating...');
+      console.log('Original response:', aiResponse);
+      attempts++;
+      
+      // Add explicit instruction to current message
+      const retryResult = await chat.sendMessage(
+        "Please provide a complete, helpful response with specific guidance. Don't just acknowledge - actually help with details and examples. Include at least 2 sentences with substance."
+      );
+      aiResponse = retryResult.response.text();
+    }
+    
+    // If still incomplete after retries, append helpful guidance
+    if (!validateResponse(aiResponse)) {
+      console.log('⚠️  Response still incomplete, adding completion...');
+      
+      // Based on context, add appropriate completion
+      if (userMessage.toLowerCase().includes('help')) {
+        aiResponse += " Let me show you! You can start by saying 'Hello!' with a smile. Try it with me now - say 'Hi, I'm happy to meet you!'";
+      } else if (userMessage.toLowerCase().includes('how')) {
+        aiResponse += " Here's what you do: look at the person, smile, and use a friendly voice. Would you like to practice that together?";
+      } else if (userMessage.toLowerCase().includes('what')) {
+        aiResponse += " " + getContextualGuidance();
+      } else {
+        aiResponse += " Let's practice together! " + getContextualGuidance();
+      }
+      
+      // Log incomplete response for analysis
+      console.error('❌ INCOMPLETE RESPONSE DETECTED:');
+      console.error('User message:', userMessage);
+      console.error('Original AI response:', result.response.text());
+      console.error('Level:', level.name);
+      console.error('Bird:', birdCharacter.name);
+    }
+    
+    console.log('✅ Final Gemini response:', aiResponse);
 
     // Calculate autism-aware scores (always encouraging)
     const scores = {
@@ -157,9 +301,13 @@ app.post('/api/chat', async (req, res) => {
       turnTaking: analysisData?.turn_appropriate !== false ? Math.floor(75 + Math.random() * 25) : 70,
       emotional: analysisData?.emotional_content?.length > 0 ? 90 : Math.floor(70 + Math.random() * 30),
       clarity: Math.floor(70 + Math.random() * 30),
-      engagement: analysisData?.engagement_level === 'high' ? 95 : 
+      engagement: emotionContext?.engagementLevel === 'high' ? 95 : 
+                  emotionContext?.engagementLevel === 'low' ? 65 :
+                  analysisData?.engagement_level === 'high' ? 95 : 
                   analysisData?.engagement_level === 'low' ? 65 : 80,
-      skillDemonstration: analysisData?.strategy_used?.length ? analysisData.strategy_used.length * 20 : 70
+      skillDemonstration: analysisData?.strategy_used?.length ? analysisData.strategy_used.length * 20 : 70,
+      // Add emotion-based bonus for trying despite struggles
+      effortBonus: emotionContext?.needsSupport ? 15 : 0
     };
     
     // Weight scores appropriately for autism (engagement matters more than perfect relevance)
