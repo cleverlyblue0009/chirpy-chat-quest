@@ -1,7 +1,6 @@
 import { ArrowLeft, Flame, Sparkles, Loader2, Trophy, Star, Lock, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProgressBar } from "@/components/ProgressBar";
-import { LevelNode } from "@/components/LevelNode";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
@@ -237,95 +236,97 @@ export default function EnhancedLearningPath() {
                   </div>
                 )}
 
-                {/* Level Card */}
-                <div className={`relative self-${level.position === 'left' ? 'start' : level.position === 'right' ? 'end' : 'center'} w-72`}>
+                {/* Level Card - Minimal Design */}
+                <div className={`flex flex-col items-center gap-2 ${
+                  level.position === 'left' ? 'self-start ml-8' : 
+                  level.position === 'right' ? 'self-end mr-8' : 
+                  'self-center'
+                }`}>
                   <Card 
-                    className={`p-4 shadow-lg cursor-pointer transform transition-all hover:scale-105 ${
-                      level.status === 'current' 
-                        ? 'ring-4 ring-yellow-400 bg-gradient-to-br from-yellow-50 to-orange-50' 
-                        : level.status === 'completed'
-                        ? 'bg-gradient-to-br from-green-50 to-emerald-50'
-                        : level.status === 'available'
-                        ? 'bg-gradient-to-br from-blue-50 to-cyan-50 hover:shadow-xl'
-                        : 'bg-gray-50 opacity-75'
+                    className={`p-6 min-w-[200px] max-w-[280px] cursor-pointer transform transition-all hover:scale-105 ${
+                      level.status === 'completed'
+                        ? 'bg-success border-success/20 shadow-soft-md'
+                        : level.status === 'current' 
+                        ? 'bg-gradient-sunrise border-secondary animate-pulse-gentle shadow-soft-lg'
+                        : level.status === 'available' && testMode
+                        ? 'bg-primary/90 border-primary/20 shadow-soft-md'
+                        : 'bg-muted border-muted-foreground/20 opacity-60'
                     }`}
                     onClick={() => {
-                      if (level.status !== 'locked' || testMode) {
+                      if (level.status === 'current' || level.status === 'completed' || (testMode && level.status !== 'locked')) {
                         navigate(`/conversation/${level.id}`);
                       }
                     }}
                   >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-2xl font-bold text-primary">
-                            {level.order}
-                          </span>
-                          {level.status === 'completed' && (
-                            <CheckCircle className="w-5 h-5 text-green-500" />
-                          )}
-                          {level.status === 'current' && (
-                            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
-                          )}
-                          {level.status === 'locked' && !testMode && (
-                            <Lock className="w-4 h-4 text-gray-400" />
-                          )}
-                        </div>
-                        <h3 className="font-bold text-lg mt-1">{level.name}</h3>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={`
+                        w-12 h-12 rounded-full flex items-center justify-center
+                        ${level.status === 'completed' ? 'bg-white/30' : 
+                          level.status === 'current' ? 'bg-white/40' : 
+                          'bg-foreground/10'}
+                      `}>
+                        {level.status === 'completed' && <CheckCircle className="w-6 h-6 text-white" />}
+                        {level.status === 'current' && <Star className="w-6 h-6 text-secondary-foreground" />}
+                        {(level.status === 'locked' || level.status === 'available') && !testMode && (
+                          <Lock className="w-6 h-6 text-muted-foreground" />
+                        )}
+                        {level.status === 'available' && testMode && (
+                          <Sparkles className="w-6 h-6 text-white" />
+                        )}
                       </div>
-                      <Badge variant="secondary" className="ml-2">
-                        +{level.xp_reward} XP
-                      </Badge>
+                      <div className="flex-1">
+                        <p className={`text-xs font-semibold ${
+                          level.status === 'locked' && !testMode ? 'text-muted-foreground' : 'text-white'
+                        }`}>
+                          Level {level.order}
+                        </p>
+                        <h3 className={`font-bold ${
+                          level.status === 'locked' && !testMode ? 'text-muted-foreground' : 'text-white'
+                        }`}>
+                          {level.name}
+                        </h3>
+                      </div>
                     </div>
                     
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {level.description}
-                    </p>
+                    {/* Minimal XP display */}
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs ${
+                        level.status === 'locked' && !testMode ? 'text-muted-foreground' : 'text-white/80'
+                      }`}>
+                        {level.conversations_completed || 0}/{level.required_conversations} conversations
+                      </span>
+                      <span className={`text-xs font-bold ${
+                        level.status === 'locked' && !testMode ? 'text-muted-foreground' : 'text-white'
+                      }`}>
+                        +{level.xp_reward} XP
+                      </span>
+                    </div>
                     
-                    {/* Progress for current level */}
+                    {/* Simple action button for current level only */}
                     {level.status === 'current' && (
-                      <div className="mb-3">
-                        <ProgressBar 
-                          value={(level.conversations_completed || 0) / level.required_conversations * 100}
-                          label={`${level.conversations_completed || 0}/${level.required_conversations} conversations`}
-                          variant="warning"
-                        />
-                      </div>
+                      <Button 
+                        className="w-full mt-3 bg-white text-secondary-foreground hover:bg-white/90 font-bold"
+                        size="lg"
+                      >
+                        Start Conversation
+                      </Button>
                     )}
                     
-                    {/* Objectives preview */}
-                    <div className="space-y-1">
-                      {level.objectives.slice(0, 2).map((objective, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <div className="w-1 h-1 bg-muted-foreground rounded-full" />
-                          <span>{objective}</span>
-                        </div>
-                      ))}
-                      {level.objectives.length > 2 && (
-                        <div className="text-xs text-muted-foreground italic">
-                          +{level.objectives.length - 2} more objectives
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Action Button */}
-                    <Button 
-                      className="w-full mt-3"
-                      variant={level.status === 'current' ? 'default' : level.status === 'available' ? 'outline' : 'ghost'}
-                      disabled={level.status === 'locked' && !testMode}
-                    >
-                      {level.status === 'current' ? 'Continue' : 
-                       level.status === 'completed' ? 'Review' : 
-                       level.status === 'available' || testMode ? 'Start' : 
-                       'Locked'}
-                    </Button>
+                    {/* Simple locked message */}
+                    {level.status === 'locked' && !testMode && (
+                      <p className="text-xs text-muted-foreground text-center mt-2">
+                        Complete previous levels to unlock
+                      </p>
+                    )}
                   </Card>
                   
-                  {/* Connecting line */}
+                  {/* Connecting path line */}
                   {index < levels.length - 1 && (
-                    <div className="absolute left-1/2 bottom-0 transform -translate-x-1/2 translate-y-full">
-                      <div className="w-1 h-16 bg-gradient-to-b from-gray-300 to-transparent" />
-                    </div>
+                    <div className={`w-1 h-16 rounded-full ${
+                      level.status === 'completed' || level.status === 'current' 
+                        ? 'bg-gradient-forest' 
+                        : 'bg-border opacity-30'
+                    }`} />
                   )}
                 </div>
               </div>

@@ -13,6 +13,7 @@ interface AIResponse {
   birdCharacter: string;
   tone: string;
   shouldEnd: boolean;
+  skillsMastered?: boolean; // Track if child has mastered the skills
   score: number;
   feedback: string;
 }
@@ -32,11 +33,16 @@ export async function generateAIResponse(
 ): Promise<AIResponse> {
   try {
     // Use enhanced adaptive response generation
+    // Get conversation to track exchanges
+    const conversationDoc = await getDoc(doc(db, 'conversations', conversationId));
+    const conversationData = conversationDoc.data();
+    const exchangeCount = conversationData?.messages?.filter((m: any) => m.sender === 'user').length || 0;
+    
     const context = {
       levelId,
       userId,
       conversationId,
-      exchangeCount: 0, // This should be tracked properly
+      exchangeCount,
       userResponses: [],
       objectives: [],
       birdCharacter: 'ruby_robin',
@@ -71,11 +77,17 @@ export async function generateAIResponse(
       // Validate and enhance the response
       const validatedResponse = validateAIResponse(response, context);
       
+      // Track skill mastery based on exchange count and performance
+      const minExchanges = 8;
+      const skillsMastered = exchangeCount >= minExchanges && 
+                           (validatedResponse.score || response.score || 75) >= 80;
+      
       return {
         text: validatedResponse.text || response.text || response.response,
         birdCharacter: response.birdCharacter || context.birdCharacter || 'ruby_robin',
         tone: response.tone || 'encouraging',
         shouldEnd: response.shouldEnd || false,
+        skillsMastered,
         score: validatedResponse.score || response.score || 75,
         feedback: validatedResponse.feedback || response.feedback || 'Great job! Keep practicing!'
       };
@@ -129,11 +141,16 @@ function generateFallbackResponse(
     selectedResponse = "That's a great question! Let me think... What do you think about it?";
   }
   
+  // Check if minimum training is complete
+  const minExchanges = 8;
+  const skillsMastered = context.exchangeCount >= minExchanges;
+  
   return {
     text: selectedResponse,
     birdCharacter: context.birdCharacter || 'ruby_robin',
     tone: 'encouraging',
     shouldEnd: false,
+    skillsMastered,
     score: 75,
     feedback: 'You\'re doing wonderfully! Keep practicing your conversation skills!'
   };

@@ -43,6 +43,7 @@ interface AIResponse {
   birdCharacter: string;
   tone: 'encouraging' | 'celebratory' | 'gentle' | 'playful' | 'calming';
   shouldEnd: boolean;
+  skillsMastered?: boolean; // Track if skills are mastered
   score?: number;
   feedback?: string;
   hints?: string[];
@@ -209,8 +210,16 @@ export function analyzeChildResponse(
     analysis.next_action = 'provide_hint';
   }
 
-  // Determine next action based on exchange count
-  if (context.exchangeCount >= 4) {
+  // Determine next action based on skill demonstration and engagement
+  // Remove hard limit - focus on skill mastery instead
+  const skillsдемонстrated = analysis.strategy_used.length;
+  const minExchanges = 8; // Minimum for proper training
+  const maxExchanges = 20; // Maximum to prevent fatigue
+  
+  if (context.exchangeCount >= maxExchanges) {
+    analysis.next_action = 'wrap_up';
+  } else if (context.exchangeCount >= minExchanges && skillsдемонстrated >= 3) {
+    // After minimum training and demonstrating multiple skills
     analysis.next_action = 'wrap_up';
   } else if (analysis.needs_support) {
     analysis.next_action = 'simplify';
@@ -270,14 +279,29 @@ export async function generateAdaptiveResponse(
     // Generate appropriate feedback
     const feedback = generateAutismAwareFeedback(metrics, analysis, context);
     
-    // Determine if conversation should end
-    const shouldEnd = analysis.next_action === 'wrap_up' || context.exchangeCount >= 5;
+    // Intelligent skill-based completion logic
+    const minExchanges = 8;
+    const maxExchanges = 20;
+    const skillsDemonstrated = analysis.strategy_used.length;
+    
+    // Check for skill mastery based on cumulative performance
+    const skillsMastered = skillsDemonstrated >= 3 && 
+                          metrics.engagement >= 80 && 
+                          metrics.relevance >= 70;
+    
+    // Only end if:
+    // 1. Maximum exchanges reached (prevent fatigue)
+    // 2. Minimum exchanges met AND skills mastered
+    // 3. AI explicitly determines wrap up is needed
+    const shouldEnd = context.exchangeCount >= maxExchanges || 
+                     (context.exchangeCount >= minExchanges && skillsMastered && analysis.next_action === 'wrap_up');
     
     return {
       text: response.response || generateFallbackResponse(analysis, context),
       birdCharacter: context.birdCharacter,
       tone: determineTone(analysis),
       shouldEnd,
+      skillsMastered, // Add skill mastery flag
       score: calculateOverallScore(metrics),
       feedback,
       hints: analysis.needs_support ? generateHints(context) : undefined,
@@ -308,8 +332,9 @@ function buildAdaptivePrompt(
     Current Context:
     - Child's communication style: ${communicationStyle}
     - Current objective: ${context.objectives[context.exchangeCount] || context.objectives[0]}
-    - Exchange ${context.exchangeCount + 1} of 5
+    - Exchange ${context.exchangeCount + 1} (Minimum 8 for proper training)
     - Child's engagement level: ${analysis.engagement_level}
+    - Skills demonstrated: ${analysis.strategy_used.join(', ') || 'none yet'}
     ${analysis.special_interest_mentioned ? '- Child mentioned their special interest - acknowledge and gently guide back' : ''}
     ${analysis.processing_time_needed ? '- Child needs processing time - be patient and offer gentle support' : ''}
     ${analysis.needs_support ? '- Child needs extra support - simplify and encourage' : ''}

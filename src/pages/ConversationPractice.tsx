@@ -64,8 +64,12 @@ export default function ConversationPractice() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  const totalQuestions = 5;
-  const progress = (currentQuestion / totalQuestions) * 100;
+  // Remove hard limit - let AI determine when conversation is complete based on skill mastery
+  const [skillsMastered, setSkillsMastered] = useState(false);
+  const [conversationExchanges, setConversationExchanges] = useState(0);
+  const minExchanges = 8; // Minimum exchanges to ensure proper training
+  const maxExchanges = 20; // Maximum to prevent overly long sessions
+  const progress = Math.min((conversationExchanges / minExchanges) * 100, 100);
 
   // Initialize Web Speech API
   useEffect(() => {
@@ -542,10 +546,12 @@ export default function ConversationPractice() {
         messages: [...currentMessages, userMessage]
       });
       
-      // Increment question counter
+      // Track conversation exchanges for proper training
       setCurrentQuestion(prev => prev + 1);
+      const currentExchanges = conversationExchanges + 1;
+      setConversationExchanges(currentExchanges);
       
-      // Generate AI response with enhanced context
+      // Generate AI response with enhanced context including exchange count
       let aiResponse;
       try {
         aiResponse = await generateAIResponse(
@@ -559,6 +565,31 @@ export default function ConversationPractice() {
         if (!aiResponse || !aiResponse.text) {
           throw new Error('Invalid AI response received');
         }
+        
+        // Check for skill mastery (AI determines this based on performance)
+        if (aiResponse.skillsMastered) {
+          setSkillsMastered(true);
+        }
+        
+        // Intelligent ending logic: 
+        // - Continue until minimum exchanges for proper training
+        // - Allow ending after minimum if skills are mastered
+        // - Force end at maximum to prevent fatigue
+        if (currentExchanges >= maxExchanges) {
+          aiResponse.shouldEnd = true;
+          aiResponse.feedback = "Wonderful session! You've practiced so much today. Let's continue next time!";
+          aiResponse.score = Math.max(aiResponse.score || 75, 85); // Ensure good score for completing full session
+        } else if (currentExchanges >= minExchanges) {
+          // After minimum exchanges, AI can suggest ending if skills are mastered
+          // But don't force it - let child continue if engaged
+          if (aiResponse.skillsMastered && !aiResponse.shouldEnd) {
+            aiResponse.feedback = (aiResponse.feedback || '') + " You're doing so well! Feel free to continue or finish when ready.";
+          }
+        } else {
+          // Before minimum exchanges, always continue for proper training
+          aiResponse.shouldEnd = false;
+        }
+        
       } catch (error) {
         console.error('Failed to get AI response:', error);
         
@@ -849,7 +880,11 @@ export default function ConversationPractice() {
             </Button>
             <div className="flex-1 mx-4">
               <p className="text-white/90 text-sm">
-                Question {currentQuestion} of {totalQuestions}
+                {conversationExchanges < minExchanges 
+                  ? `Exchange ${conversationExchanges} (Min ${minExchanges} for completion)`
+                  : skillsMastered 
+                  ? 'Skills mastered! Feel free to continue or finish.'
+                  : `Exchange ${conversationExchanges} - Keep practicing!`}
               </p>
               <Progress value={progress} className="h-2 mt-1 bg-white/30" />
             </div>
