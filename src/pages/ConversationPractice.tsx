@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { ArrowLeft, Mic, MicOff, Lightbulb, Volume2, Loader2, Send } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { ArrowLeft, Mic, MicOff, Lightbulb, Volume2, Loader2, Send, Camera, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -21,6 +21,10 @@ import { db, storage } from "@/lib/firebase";
 import { generateAIResponse, generateInitialGreeting } from "@/lib/ai/conversationEngine";
 import { generateSpeech, playAudioWithAnimation } from "@/lib/speech/textToSpeech";
 import { analyzePronunciation } from "@/lib/speech/pronunciation";
+import { WebcamEmotionDetector } from "@/components/WebcamEmotionDetector";
+import { ParentalConsentModal } from "@/components/ParentalConsentModal";
+import { FaceDetectionService } from "@/lib/emotion/faceDetection";
+import { EmotionAnalysis, ParentalConsent, StrugglingSignals } from "@/types/emotion";
 import forestBg from "@/assets/forest-background.jpg";
 import robinAvatar from "@/assets/robin-character.png";
 import owlAvatar from "@/assets/owl-character.png";
@@ -58,6 +62,15 @@ export default function ConversationPractice() {
   const [textInput, setTextInput] = useState("");
   const [useTextInput, setUseTextInput] = useState(false);
   
+  // Emotion detection state
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [parentalConsent, setParentalConsent] = useState<ParentalConsent | null>(null);
+  const [currentEmotion, setCurrentEmotion] = useState<EmotionAnalysis | null>(null);
+  const [emotionHistory, setEmotionHistory] = useState<EmotionAnalysis[]>([]);
+  const [showEmotionDetector, setShowEmotionDetector] = useState(false);
+  const [strugglingSignals, setStrugglingSignals] = useState<StrugglingSignals | null>(null);
+  const [lastEmotionFeedback, setLastEmotionFeedback] = useState<string | null>(null);
+  
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
@@ -70,6 +83,87 @@ export default function ConversationPractice() {
   const minExchanges = 8; // Minimum exchanges to ensure proper training
   const maxExchanges = 20; // Maximum to prevent overly long sessions
   const progress = Math.min((conversationExchanges / minExchanges) * 100, 100);
+
+  // Check for existing parental consent on mount
+  useEffect(() => {
+    const checkParentalConsent = async () => {
+      if (!currentUser) return;
+      
+      try {
+        const consentDoc = await getDoc(doc(db, 'parental_consent', currentUser.uid));
+        if (consentDoc.exists()) {
+          const consent = consentDoc.data() as ParentalConsent;
+          setParentalConsent(consent);
+          if (consent.features.facialDetection) {
+            setShowEmotionDetector(true);
+          }
+        } else {
+          // Show consent modal after a short delay to let page load
+          setTimeout(() => setShowConsentModal(true), 2000);
+        }
+      } catch (error) {
+        console.error('Error checking parental consent:', error);
+      }
+    };
+    
+    checkParentalConsent();
+  }, [currentUser]);
+  
+  // Handle emotion detection
+  const handleEmotionDetected = useCallback((analysis: EmotionAnalysis) => {
+    setCurrentEmotion(analysis);
+    
+    // Add to history
+    setEmotionHistory(prev => {
+      const updated = [...prev, analysis].slice(-10); // Keep last 10 readings
+      
+      // Analyze for struggling patterns
+      const signals = FaceDetectionService.analyzeEmotionHistory(updated);
+      setStrugglingSignals(signals);
+      
+      // Generate supportive feedback if needed
+      const feedback = FaceDetectionService.generateEmotionFeedback(analysis, signals);
+      if (feedback && feedback !== lastEmotionFeedback) {
+        setLastEmotionFeedback(feedback);
+        // Show supportive message (could be displayed in UI or sent to bird)
+        console.log('Emotion feedback:', feedback);
+      }
+      
+      return updated;
+    });
+  }, [lastEmotionFeedback]);
+  
+  // Handle parental consent
+  const handleParentalConsent = async (consent: ParentalConsent) => {
+    if (!currentUser) return;
+    
+    try {
+      // Save consent to Firestore
+      await updateDoc(doc(db, 'parental_consent', currentUser.uid), {
+        ...consent,
+        userId: currentUser.uid,
+        timestamp: Timestamp.now(),
+      });
+      
+      setParentalConsent(consent);
+      setShowConsentModal(false);
+      
+      if (consent.features.facialDetection) {
+        setShowEmotionDetector(true);
+        toast({
+          title: "Features Enabled",
+          description: "Facial emotion detection has been enabled to better support learning.",
+        });
+      }
+    } catch (error) {
+      console.error('Error saving parental consent:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save consent preferences",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Initialize Web Speech API
   useEffect(() => {
@@ -537,28 +631,62 @@ export default function ConversationPractice() {
         showPronunciationFeedback(pronunciationScore);
       }
       
-      // Update Firestore
+      // Update Firestore with emotion analytics if available
       const conversationRef = doc(db, 'conversations', conversationId);
       const conversationDoc = await getDoc(conversationRef);
       const currentMessages = conversationDoc.data()?.messages || [];
       
-      await updateDoc(conversationRef, {
+      const updateData: any = {
         messages: [...currentMessages, userMessage]
-      });
+      };
+      
+      // Add emotion timeline if emotion detection is enabled
+      if (currentEmotion && parentalConsent?.features.emotionTracking) {
+        const emotionTimeline = conversationDoc.data()?.emotion_timeline || [];
+        emotionTimeline.push({
+          timestamp: Date.now(),
+          emotion: currentEmotion.currentEmotion,
+          engagement: currentEmotion.engagementLevel,
+          struggling: currentEmotion.needsSupport
+        });
+        
+        // Calculate averages for analytics
+        const avgEngagement = emotionHistory.reduce((sum, e) => {
+          return sum + (e.engagementLevel === 'high' ? 1 : e.engagementLevel === 'medium' ? 0.5 : 0);
+        }, 0) / Math.max(emotionHistory.length, 1);
+        
+        const supportTriggers = emotionHistory.filter(e => e.needsSupport).length;
+        
+        updateData.emotion_timeline = emotionTimeline;
+        updateData.average_engagement = avgEngagement;
+        updateData.support_triggers = supportTriggers;
+      }
+      
+      await updateDoc(conversationRef, updateData);
       
       // Track conversation exchanges for proper training
       setCurrentQuestion(prev => prev + 1);
       const currentExchanges = conversationExchanges + 1;
       setConversationExchanges(currentExchanges);
       
-      // Generate AI response with enhanced context including exchange count
+      // Generate AI response with enhanced context including exchange count and emotion data
       let aiResponse;
       try {
+        // Prepare emotion context if available
+        const emotionContext = currentEmotion ? {
+          detectedEmotion: currentEmotion.currentEmotion,
+          engagementLevel: currentEmotion.engagementLevel,
+          strugglingIndicators: currentEmotion.strugglingIndicators,
+          needsSupport: currentEmotion.needsSupport,
+          isLookingAtScreen: currentEmotion.isLookingAtScreen,
+        } : undefined;
+        
         aiResponse = await generateAIResponse(
           conversationId,
           currentUser.uid,
           levelId,
-          cleanedText
+          cleanedText,
+          emotionContext // Pass emotion context to AI
         );
         
         // Validate AI response
@@ -1076,9 +1204,59 @@ export default function ConversationPractice() {
                useTextInput ? "Type your message and press Enter" :
                "Tap the microphone to speak"}
             </p>
+            
+            {/* Emotion Support Feedback */}
+            {lastEmotionFeedback && (
+              <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-700 text-center">
+                  💙 {lastEmotionFeedback}
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </div>
+      
+      {/* Webcam Emotion Detector (positioned fixed) */}
+      {showEmotionDetector && parentalConsent?.features.facialDetection && (
+        <div className="fixed bottom-4 left-4 z-50">
+          <WebcamEmotionDetector
+            onEmotionDetected={handleEmotionDetected}
+            config={{
+              enabled: false, // Start disabled, user can turn on
+              showPreview: true,
+              detectionInterval: 2000,
+              privacyMode: true,
+            }}
+            showPrivacyNotice={true}
+            minimizable={true}
+            className="max-w-sm"
+          />
+        </div>
+      )}
+      
+      {/* Parental Consent Modal */}
+      <ParentalConsentModal
+        isOpen={showConsentModal}
+        onClose={() => setShowConsentModal(false)}
+        onConsent={handleParentalConsent}
+        childName={currentUser?.displayName || "your child"}
+      />
+      
+      {/* Privacy Badge */}
+      {parentalConsent?.features.facialDetection && (
+        <div className="fixed top-20 right-4 z-40">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2 text-xs opacity-70 hover:opacity-100"
+            onClick={() => setShowConsentModal(true)}
+          >
+            <Shield className="h-3 w-3" />
+            Privacy Settings
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
