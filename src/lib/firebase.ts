@@ -20,16 +20,23 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Enable persistence for offline support
+// Enable persistence for offline support with better error handling
 if (typeof window !== 'undefined') {
   import('firebase/firestore').then(({ enableIndexedDbPersistence }) => {
     enableIndexedDbPersistence(db).catch((err) => {
       if (err.code === 'failed-precondition') {
-        console.warn('Persistence failed: Multiple tabs open');
+        // Multiple tabs open, this is expected
+        console.info('Firestore persistence: Multiple tabs open, using memory persistence');
       } else if (err.code === 'unimplemented') {
-        console.warn('Persistence not available');
+        // Browser doesn't support persistence
+        console.info('Firestore persistence: Not available in this browser');
+      } else {
+        // Other errors
+        console.warn('Firestore persistence error:', err);
       }
     });
+  }).catch((error) => {
+    console.error('Failed to import Firestore persistence module:', error);
   });
 }
 

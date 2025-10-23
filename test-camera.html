@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px 5px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #333;
+            background: #4CAF50;
+            color: white;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .error {
+            color: red;
+            padding: 10px;
+            background: #ffe0e0;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            color: green;
+            padding: 10px;
+            background: #e0ffe0;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status {
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Camera Test</h1>
+    <p>This page tests camera functionality in isolation.</p>
+    
+    <div class="status">
+        <h3>Browser Information:</h3>
+        <pre id="browser-info"></pre>
+    </div>
+    
+    <div id="message"></div>
+    
+    <div>
+        <button id="enable-camera">Enable Camera</button>
+        <button id="disable-camera" disabled>Disable Camera</button>
+    </div>
+    
+    <video id="video" autoplay playsinline muted style="display: none;"></video>
+    
+    <div class="status">
+        <h3>Debug Log:</h3>
+        <pre id="debug-log"></pre>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const enableBtn = document.getElementById('enable-camera');
+        const disableBtn = document.getElementById('disable-camera');
+        const message = document.getElementById('message');
+        const debugLog = document.getElementById('debug-log');
+        const browserInfo = document.getElementById('browser-info');
+        
+        let stream = null;
+        const logs = [];
+        
+        function log(msg, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${msg}`;
+            logs.push(logEntry);
+            debugLog.textContent = logs.join('\n');
+            console.log(logEntry);
+        }
+        
+        function showMessage(msg, type = 'info') {
+            message.className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'status';
+            message.textContent = msg;
+        }
+        
+        // Display browser information
+        browserInfo.textContent = `User Agent: ${navigator.userAgent}
+Protocol: ${location.protocol}
+Host: ${location.host}
+Secure Context: ${window.isSecureContext}
+MediaDevices Available: ${!!navigator.mediaDevices}
+getUserMedia Available: ${!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)}`;
+        
+        async function enableCamera() {
+            try {
+                log('Starting camera enable process...');
+                enableBtn.disabled = true;
+                showMessage('Requesting camera access...', 'info');
+                
+                // Check browser compatibility
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('getUserMedia is not supported in this browser');
+                }
+                
+                // Check if we're in a secure context
+                if (!window.isSecureContext) {
+                    log('Warning: Not in a secure context. Camera may not work.', 'warning');
+                }
+                
+                // Request camera permission
+                log('Requesting camera permission...');
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    },
+                    audio: false
+                });
+                
+                log('Camera permission granted');
+                log(`Stream active: ${stream.active}`);
+                log(`Video tracks: ${stream.getVideoTracks().length}`);
+                
+                // Attach stream to video element
+                video.srcObject = stream;
+                video.style.display = 'block';
+                
+                // Wait for video to be ready
+                video.onloadedmetadata = () => {
+                    log('Video metadata loaded');
+                    video.play().then(() => {
+                        log('Video playback started');
+                        showMessage('Camera enabled successfully!', 'success');
+                        enableBtn.disabled = true;
+                        disableBtn.disabled = false;
+                    }).catch(err => {
+                        log(`Video play error: ${err.message}`, 'error');
+                    });
+                };
+                
+            } catch (error) {
+                log(`Camera error: ${error.name} - ${error.message}`, 'error');
+                
+                let errorMessage = 'Failed to enable camera';
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = 'Camera permission was denied. Please allow camera access in your browser settings.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = 'No camera found. Please connect a camera and try again.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage = 'Camera is already in use by another application.';
+                } else if (error.name === 'OverconstrainedError') {
+                    errorMessage = 'Camera does not support the requested constraints.';
+                } else if (error.name === 'TypeError') {
+                    errorMessage = 'Invalid constraints or browser compatibility issue.';
+                }
+                
+                showMessage(errorMessage, 'error');
+                enableBtn.disabled = false;
+            }
+        }
+        
+        function disableCamera() {
+            log('Disabling camera...');
+            
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    log(`Stopped track: ${track.kind}`);
+                });
+                stream = null;
+            }
+            
+            video.srcObject = null;
+            video.style.display = 'none';
+            
+            showMessage('Camera disabled', 'info');
+            enableBtn.disabled = false;
+            disableBtn.disabled = true;
+            log('Camera disabled successfully');
+        }
+        
+        enableBtn.addEventListener('click', enableCamera);
+        disableBtn.addEventListener('click', disableCamera);
+        
+        // Log initial state
+        log('Page loaded, ready for camera test');
+    </script>
+</body>
+</html>
