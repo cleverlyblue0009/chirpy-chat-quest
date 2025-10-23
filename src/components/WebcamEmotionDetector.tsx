@@ -68,7 +68,15 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
   
   // Start camera and detection
   const startCamera = useCallback(async () => {
-    if (!faceServiceRef.current || !videoRef.current) return;
+    // Check if face service is initialized
+    if (!faceServiceRef.current) {
+      console.error('Face detection service not initialized');
+      setCameraState({
+        status: 'denied',
+        error: 'Face detection service not initialized',
+      });
+      return;
+    }
     
     try {
       setCameraState({ status: 'checking' });
@@ -79,8 +87,19 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
       // Request camera access
       const stream = await faceServiceRef.current.requestCameraAccess();
       
+      // Wait for video element to be ready
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        
+        // Wait for video to be ready before playing
+        await new Promise<void>((resolve) => {
+          if (videoRef.current) {
+            videoRef.current.onloadedmetadata = () => resolve();
+          } else {
+            resolve();
+          }
+        });
+        
         await videoRef.current.play();
       }
       
@@ -89,14 +108,25 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
       
       // Start detection loop
       startDetectionLoop();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Camera error:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = 'Camera access was denied or unavailable';
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Camera permission was denied. Please allow camera access in your browser settings.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No camera found. Please connect a camera and try again.';
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = 'Camera is already in use by another application.';
+      }
+      
       setCameraState({
         status: 'denied',
-        error: 'Camera access was denied or unavailable',
+        error: errorMessage,
       });
     }
-  }, []);
+  }, [startDetectionLoop]);
   
   // Stop camera and detection
   const stopCamera = useCallback(() => {
@@ -308,9 +338,15 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
                   size="sm"
                   onClick={startCamera}
                   className="mt-2"
+                  disabled={cameraState.status === 'checking'}
                 >
-                  Enable Camera
+                  {cameraState.status === 'checking' ? 'Loading...' : 'Enable Camera'}
                 </Button>
+                {cameraState.error && (
+                  <p className="text-xs text-red-500 mt-2">
+                    {cameraState.error}
+                  </p>
+                )}
               </div>
             )}
             

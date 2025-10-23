@@ -27,9 +27,13 @@ export class FaceDetectionService {
    * Load face-api.js models
    */
   async loadModels(): Promise<void> {
-    if (this.modelsLoaded) return;
+    if (this.modelsLoaded) {
+      console.log('Face detection models already loaded');
+      return;
+    }
     
     try {
+      console.log('Loading face detection models...');
       // Load models from CDN
       const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model';
       
@@ -41,10 +45,11 @@ export class FaceDetectionService {
       ]);
       
       this.modelsLoaded = true;
-      console.log('✅ Face detection models loaded');
+      console.log('✅ Face detection models loaded successfully');
     } catch (error) {
       console.error('❌ Failed to load face detection models:', error);
-      throw error;
+      this.modelsLoaded = false;
+      throw new Error(`Failed to load face detection models: ${error}`);
     }
   }
   
@@ -53,6 +58,13 @@ export class FaceDetectionService {
    */
   async requestCameraAccess(): Promise<MediaStream> {
     try {
+      console.log('Requesting camera access...');
+      
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia is not supported in this browser');
+      }
+      
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 640 },
@@ -61,10 +73,13 @@ export class FaceDetectionService {
         }
       });
       
+      console.log('✅ Camera access granted');
       this.detectionStream = stream;
       return stream;
-    } catch (error) {
-      console.error('Camera access denied:', error);
+    } catch (error: any) {
+      console.error('❌ Camera access error:', error);
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
       throw error;
     }
   }

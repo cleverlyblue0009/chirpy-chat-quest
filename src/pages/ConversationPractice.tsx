@@ -96,13 +96,19 @@ export default function ConversationPractice() {
           setParentalConsent(consent);
           if (consent.features.facialDetection) {
             setShowEmotionDetector(true);
+            console.log('Facial detection enabled for user');
           }
         } else {
           // Show consent modal after a short delay to let page load
+          console.log('No parental consent found, will show modal');
           setTimeout(() => setShowConsentModal(true), 2000);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error checking parental consent:', error);
+        // Continue without emotion detection if there's an error
+        if (error.code === 'unavailable') {
+          console.warn('Firestore unavailable, skipping parental consent check');
+        }
       }
     };
     
