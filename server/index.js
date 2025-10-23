@@ -63,6 +63,131 @@ const BIRD_VOICES = {
 // ======================
 // CHAT API ENDPOINT - Enhanced for Autism-Aware Conversations
 // ======================
+// Helper function to build adaptive instructions based on emotion context
+function buildAdaptiveInstructions(emotionContext) {
+  if (!emotionContext) {
+    return "The child is engaged and ready to learn.";
+  }
+  
+  let instructions = [];
+  
+  // Detect struggling
+  if (emotionContext.isStruggling) {
+    instructions.push("⚠️ CHILD IS STRUGGLING:");
+    instructions.push("- Simplify your next response dramatically");
+    instructions.push("- Use only 1 short sentence");
+    instructions.push("- Offer a specific, easy example");
+    instructions.push("- Ask if they want help");
+  }
+  
+  // Low engagement
+  if (emotionContext.engagementLevel === 'low') {
+    instructions.push("⚠️ LOW ENGAGEMENT:");
+    instructions.push("- Make response more exciting and playful");
+    instructions.push("- Use their name");
+    instructions.push("- Add an element of fun or surprise");
+  }
+  
+  // Not looking at screen
+  if (!emotionContext.isLookingAtScreen || emotionContext.lookAwayCount >= 3) {
+    instructions.push("⚠️ ATTENTION DRIFT:");
+    instructions.push("- Child may be overwhelmed or distracted");
+    instructions.push("- Keep next response VERY short (1 sentence)");
+    instructions.push("- Offer a break option");
+    instructions.push("- Use calming, gentle tone");
+  }
+  
+  // Frustrated or upset
+  if (['angry', 'sad', 'fearful', 'disgusted'].includes(emotionContext.currentEmotion)) {
+    instructions.push("⚠️ EMOTIONAL DISTRESS:");
+    instructions.push("- Validate their feelings explicitly");
+    instructions.push("- Reassure them it's okay to struggle");
+    instructions.push("- Offer to try something easier");
+    instructions.push("- Use soothing language");
+  }
+  
+  // Confused
+  if (emotionContext.currentEmotion === 'surprised' || emotionContext.needsSimplification) {
+    instructions.push("⚠️ CONFUSION DETECTED:");
+    instructions.push("- Break down the previous concept");
+    instructions.push("- Give a concrete example");
+    instructions.push("- Use simpler words");
+  }
+  
+  // Taking long to respond
+  if (emotionContext.processingTime > 10000) { // 10+ seconds
+    instructions.push("ℹ️ SLOW PROCESSING:");
+    instructions.push("- Child needs more time");
+    instructions.push("- Don't rush them");
+    instructions.push("- Acknowledge they're thinking");
+    instructions.push("- Provide encouragement to take their time");
+  }
+  
+  // High engagement - doing great!
+  if (emotionContext.engagementLevel === 'high' && 
+      emotionContext.currentEmotion === 'happy') {
+    instructions.push("✅ EXCELLENT ENGAGEMENT:");
+    instructions.push("- Child is confident and engaged");
+    instructions.push("- You can maintain current difficulty");
+    instructions.push("- Celebrate their success enthusiastically");
+  }
+  
+  if (instructions.length === 0) {
+    return "The child appears calm and ready. Proceed normally.";
+  }
+  
+  return instructions.join('\n');
+}
+
+// Helper function to enforce autism-friendly response format
+function enforceAutismFriendlyFormat(response) {
+  // Split into sentences
+  let sentences = response.match(/[^.!?]+[.!?]+/g) || [response];
+  
+  // Remove any sentences beyond 2
+  if (sentences.length > 2) {
+    sentences = sentences.slice(0, 2);
+  }
+  
+  // If sentences are too long, simplify
+  sentences = sentences.map(sentence => {
+    sentence = sentence.trim();
+    
+    // If sentence is over 15 words, try to simplify
+    const words = sentence.split(/\s+/);
+    if (words.length > 15) {
+      // Take first clause only
+      const firstClause = sentence.split(/,|;/)[0];
+      return firstClause + (firstClause.endsWith('.') || firstClause.endsWith('!') || firstClause.endsWith('?') ? '' : '.');
+    }
+    
+    return sentence;
+  });
+  
+  return sentences.join(' ').trim();
+}
+
+// Helper function to ensure friendly tone
+function ensureFriendlyTone(response, birdName) {
+  // Add warmth if response feels clinical
+  const warmWords = ['great', 'wonderful', 'awesome', 'nice', 'good'];
+  const hasWarmth = warmWords.some(word => response.toLowerCase().includes(word));
+  
+  if (!hasWarmth && Math.random() > 0.5) {
+    // Add encouraging prefix
+    const encouragements = [
+      "You're doing great! ",
+      "Wonderful! ",
+      "I love that! ",
+      "Nice work! ",
+      "Awesome! "
+    ];
+    response = encouragements[Math.floor(Math.random() * encouragements.length)] + response;
+  }
+  
+  return response;
+}
+
 app.post('/api/chat', async (req, res) => {
   try {
     const { conversationId, userId, levelId, userMessage, systemPrompt, analysisData, emotionContext } = req.body;
@@ -99,92 +224,44 @@ app.post('/api/chat', async (req, res) => {
     const exchangeCount = conversation.messages.filter(m => m.sender === 'user').length;
     const shouldEnd = exchangeCount >= 5;
 
+    // Build adaptive instructions based on emotion context
+    const adaptiveInstructions = buildAdaptiveInstructions(emotionContext);
+
     // Use provided system prompt or create enhanced default
     const enhancedSystemPrompt = systemPrompt || `
       You are ${birdCharacter.name}, ${birdCharacter.personality}.
-      
+
       ${birdCharacter.system_prompt}
-      
+
       Current lesson: ${level.name} - ${level.description}
-      Topics: ${level.conversation_topics?.join(', ') || 'conversation skills'}
-      
-      CRITICAL RESPONSE RULES:
-      1. NEVER say "Yes, I can help with that" or similar acknowledgments without immediately providing the help
-      2. ALWAYS give complete, actionable responses in one message
-      3. If child asks for help: provide the help IMMEDIATELY in your response
-      4. If child asks a question: answer it FULLY in your response
-      5. NEVER end with just acknowledgment - always include substance
-      
-      RESPONSE STRUCTURE (follow this):
-      - If child needs help: Give specific help + encouraging note + follow-up question
-      - If child asks question: Answer completely + relate to lesson + ask if they want to try
-      - If child responds: Validate + build on their response + guide to next step
-      
-      LENGTH REQUIREMENTS:
-      - Minimum 2 complete sentences with substance
-      - Maximum 4 sentences (under 50 words total)
-      - Never just one sentence acknowledgments
-      - Always end with a question or invitation to continue
-      
-      Example BAD response (NEVER do this):
-      "Yes, I can help you with that."
-      
-      Example GOOD responses (ALWAYS do this):
-      "I'd love to help! When you meet someone new, you can smile and say 'Hi, my name is [your name].' That's a great way to start! Would you like to try saying that with me?"
-      
-      "Great question! To greet someone nicely, you can look at them, smile, and say 'Hello' or 'Hi there!' The smile is really important because it shows you're friendly. Can you try giving me a greeting right now?"
-      
-      AUTISM-SPECIFIC GUIDELINES:
-      - Be EXPLICIT and SPECIFIC (no vague responses)
-      - Break complex things into clear steps
-      - Always complete your thought - don't leave them hanging
-      - If you start helping, finish helping in that response
-      - Children with autism may not ask "please continue" - so give full responses
-      - Use simple, concrete language (avoid metaphors unless explaining)
-      - Be encouraging and positive - celebrate ALL attempts
-      - Accept brief responses as valid
-      - Give processing time - acknowledge pauses are okay
-      - Never pressure for eye contact
-      - One question or idea at a time
-      - Validate echolalia and special interests
-      
-      EXAMPLE INTERACTIONS (follow this pattern):
-      
-      Child: "Can you help me say hello?"
-      You: "Of course! When greeting someone, you can smile and say 'Hello!' or 'Hi there!' Try to look at them when you say it - that makes your greeting extra friendly! Would you like to practice with me?"
-      
-      Child: "I don't know what to say."
-      You: "That's okay! Let's practice together. You can start with something simple like 'Hi, how are you?' That's a perfect way to start a conversation. Can you try saying that now?"
-      
-      Child: "How do I introduce myself?"
-      You: "Great question! You can say 'Hi, my name is [your name].' Then you might ask 'What's your name?' That helps you get to know the other person! Want to try it?"
-      
-      ${shouldEnd ? '\nThis is the FINAL exchange. Congratulate them warmly, summarize what they learned, and end positively in a COMPLETE response.' : ''}
-      ${analysisData?.needs_support ? '\nChild needs extra support. Simplify language, offer choices, and be extra encouraging.' : ''}
-      ${analysisData?.engagement_level === 'high' ? '\nChild is highly engaged! Match their enthusiasm!' : ''}
-      
-      ${emotionContext ? `
-      EMOTIONAL CONTEXT (from facial detection):
-      - Current emotion: ${emotionContext.detectedEmotion} 
-      - Engagement level: ${emotionContext.engagementLevel}
-      - Looking at screen: ${emotionContext.isLookingAtScreen ? 'Yes' : 'No'}
-      ${emotionContext.strugglingIndicators?.length > 0 ? `- Struggling indicators: ${emotionContext.strugglingIndicators.join(', ')}` : ''}
-      ${emotionContext.needsSupport ? '- Child needs support - be extra encouraging and simplify!' : ''}
-      
-      RESPONSE GUIDELINES based on emotion:
-      ${emotionContext.detectedEmotion === 'sad' ? '- Be extra gentle and encouraging' : ''}
-      ${emotionContext.detectedEmotion === 'angry' || emotionContext.detectedEmotion === 'disgusted' ? '- Acknowledge frustration, offer simpler approach' : ''}
-      ${emotionContext.detectedEmotion === 'fearful' || emotionContext.detectedEmotion === 'surprised' ? '- Reassure and explain more clearly' : ''}
-      ${emotionContext.detectedEmotion === 'happy' ? '- Match their enthusiasm!' : ''}
-      ${emotionContext.detectedEmotion === 'neutral' && emotionContext.isLookingAtScreen ? '- They are processing - give clear guidance' : ''}
-      ${!emotionContext.isLookingAtScreen ? '- They looked away - check if they need a break' : ''}
-      ${emotionContext.engagementLevel === 'low' ? '- Try to re-engage with excitement or a new approach' : ''}
-      ${emotionContext.strugglingIndicators?.includes('frustration') ? '- Break down the task into smaller steps' : ''}
-      ${emotionContext.strugglingIndicators?.includes('confusion') ? '- Clarify and give examples' : ''}
-      ${emotionContext.strugglingIndicators?.includes('processing') ? '- Give them time, acknowledge their thinking' : ''}
-      ` : ''}
-      
-      Remember: Each response should stand alone as complete and helpful. Never require a follow-up prompt to finish your thought.
+
+      ${adaptiveInstructions}
+
+      CORE RULES FOR AUTISM-FRIENDLY COMMUNICATION:
+      1. **BREVITY**: Keep responses SHORT - 1-2 sentences maximum
+      2. **CLARITY**: Use simple, concrete words - no metaphors or idioms
+      3. **DIRECTNESS**: Say exactly what you mean - no hints or implications
+      4. **POSITIVE**: Always encouraging, never critical
+      5. **PREDICTABLE**: Follow a consistent pattern in responses
+      6. **PATIENT**: Never rush, always supportive
+
+      RESPONSE FORMULA (follow strictly):
+      - ONE sentence validating their response
+      - ONE sentence guiding them to next step OR asking follow-up
+      - TOTAL: Maximum 2 sentences, use periods not commas
+
+      EXAMPLES OF PERFECT RESPONSES:
+      "Great job saying hi! Now try adding your name, like 'Hi, I'm [name].'"
+      "I can see you're thinking hard! Take your time and try when you're ready."
+      "You said that clearly! Can you say it again with a smile?"
+
+      NEVER DO THIS:
+      ❌ Long explanations
+      ❌ Multiple questions at once
+      ❌ Complex instructions
+      ❌ Vague feedback like "good job" without specifics
+
+      ${shouldEnd ? 'Wrap up in ONE warm sentence thanking them.' : ''}
     `;
 
     // Initialize the Gemini model
@@ -256,42 +333,11 @@ app.post('/api/chat', async (req, res) => {
     let result = await chat.sendMessage(userMessage);
     let aiResponse = result.response.text();
     
-    // Validate and regenerate if incomplete
-    let attempts = 0;
-    while (!validateResponse(aiResponse) && attempts < 2) {
-      console.log('⚠️  Incomplete response detected, regenerating...');
-      console.log('Original response:', aiResponse);
-      attempts++;
-      
-      // Add explicit instruction to current message
-      const retryResult = await chat.sendMessage(
-        "Please provide a complete, helpful response with specific guidance. Don't just acknowledge - actually help with details and examples. Include at least 2 sentences with substance."
-      );
-      aiResponse = retryResult.response.text();
-    }
+    // Enforce autism-friendly format (1-2 sentences maximum)
+    aiResponse = enforceAutismFriendlyFormat(aiResponse);
     
-    // If still incomplete after retries, append helpful guidance
-    if (!validateResponse(aiResponse)) {
-      console.log('⚠️  Response still incomplete, adding completion...');
-      
-      // Based on context, add appropriate completion
-      if (userMessage.toLowerCase().includes('help')) {
-        aiResponse += " Let me show you! You can start by saying 'Hello!' with a smile. Try it with me now - say 'Hi, I'm happy to meet you!'";
-      } else if (userMessage.toLowerCase().includes('how')) {
-        aiResponse += " Here's what you do: look at the person, smile, and use a friendly voice. Would you like to practice that together?";
-      } else if (userMessage.toLowerCase().includes('what')) {
-        aiResponse += " " + getContextualGuidance();
-      } else {
-        aiResponse += " Let's practice together! " + getContextualGuidance();
-      }
-      
-      // Log incomplete response for analysis
-      console.error('❌ INCOMPLETE RESPONSE DETECTED:');
-      console.error('User message:', userMessage);
-      console.error('Original AI response:', result.response.text());
-      console.error('Level:', level.name);
-      console.error('Bird:', birdCharacter.name);
-    }
+    // Ensure friendly tone
+    aiResponse = ensureFriendlyTone(aiResponse, birdCharacter.name);
     
     console.log('✅ Final Gemini response:', aiResponse);
 

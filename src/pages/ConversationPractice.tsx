@@ -582,6 +582,86 @@ export default function ConversationPractice() {
     }
   };
 
+  // Helper functions for emotion analysis
+  const calculateEngagement = (emotions: EmotionAnalysis[]) => {
+    if (emotions.length === 0) return 'medium';
+    
+    const lookingAtScreen = emotions.filter(e => e.isLookingAtScreen).length;
+    const percentage = (lookingAtScreen / emotions.length) * 100;
+    
+    if (percentage >= 70) return 'high';
+    if (percentage >= 40) return 'medium';
+    return 'low';
+  };
+
+  const detectStruggling = (emotions: EmotionAnalysis[]) => {
+    if (emotions.length < 3) return false;
+    
+    const negativeEmotions = ['sad', 'angry', 'fearful', 'disgusted'];
+    const strugglingCount = emotions.filter(e => 
+      negativeEmotions.includes(e.currentEmotion) || 
+      !e.isLookingAtScreen
+    ).length;
+    
+    return strugglingCount >= 3;
+  };
+
+  const checkNeedsSimplification = (emotions: EmotionAnalysis[]) => {
+    const recentConfusion = emotions.slice(-3).filter(e => 
+      e.currentEmotion === 'surprised' || e.currentEmotion === 'fearful'
+    ).length;
+    
+    return recentConfusion >= 2;
+  };
+
+  const calculateProcessingTime = () => {
+    // Time since last message
+    if (messages.length === 0) return 0;
+    const lastMessage = messages[messages.length - 1];
+    return Date.now() - lastMessage.timestamp.toMillis();
+  };
+
+  const calculatePace = () => {
+    if (messages.length < 4) return 'normal';
+    
+    const recent = messages.slice(-4);
+    const times = recent.map((msg, i) => {
+      if (i === 0) return 0;
+      return msg.timestamp.toMillis() - recent[i-1].timestamp.toMillis();
+    });
+    
+    const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+    
+    if (avgTime < 3000) return 'fast';
+    if (avgTime > 15000) return 'slow';
+    return 'normal';
+  };
+
+  const detectEmotionChanges = (emotions: EmotionAnalysis[]) => {
+    if (emotions.length < 2) return 0;
+    
+    let changes = 0;
+    for (let i = 1; i < emotions.length; i++) {
+      if (emotions[i].currentEmotion !== emotions[i-1].currentEmotion) {
+        changes++;
+      }
+    }
+    return changes;
+  };
+
+  const getEmotionMessage = (emotion: EmotionAnalysis) => {
+    const messages = {
+      happy: "You look happy! 😊",
+      sad: "You seem a bit sad. I'm here for you! 💙",
+      angry: "Feeling frustrated? That's okay! 🤗",
+      surprised: "Something surprising? Let's figure it out! ✨",
+      fearful: "It's okay to feel unsure. Take your time! 🌟",
+      disgusted: "Something bothering you? Let's try something else! 🌈",
+      neutral: "You're doing great! 👍",
+    };
+    return messages[emotion.currentEmotion] || messages.neutral;
+  };
+
   // Process user message
   const processUserMessage = async (text: string, audioBlob?: Blob) => {
     if (!currentUser || !conversationId || !text.trim()) {
@@ -678,21 +758,42 @@ export default function ConversationPractice() {
       // Generate AI response with enhanced context including exchange count and emotion data
       let aiResponse;
       try {
-        // Prepare emotion context if available
-        const emotionContext = currentEmotion ? {
-          detectedEmotion: currentEmotion.currentEmotion,
-          engagementLevel: currentEmotion.engagementLevel,
-          strugglingIndicators: currentEmotion.strugglingIndicators,
-          needsSupport: currentEmotion.needsSupport,
-          isLookingAtScreen: currentEmotion.isLookingAtScreen,
-        } : undefined;
+        // Get current emotion data from face detection
+        const currentEmotionData = emotionHistory[emotionHistory.length - 1];
+        
+        // Calculate engagement and struggling indicators
+        const recentEmotions = emotionHistory.slice(-5);
+        const engagementLevel = calculateEngagement(recentEmotions);
+        const isStruggling = detectStruggling(recentEmotions);
+        const needsSimplification = checkNeedsSimplification(recentEmotions);
+        
+        // Prepare comprehensive emotion context
+        const emotionContext = {
+          // Facial expression data
+          currentEmotion: currentEmotionData?.currentEmotion || 'neutral',
+          emotionConfidence: currentEmotionData?.confidence || 0,
+          isLookingAtScreen: currentEmotionData?.isLookingAtScreen !== false,
+          
+          // Calculated insights
+          engagementLevel: engagementLevel, // 'high' | 'medium' | 'low'
+          isStruggling: isStruggling, // boolean
+          needsSimplification: needsSimplification, // boolean
+          
+          // Additional context
+          processingTime: calculateProcessingTime(), // How long since last message
+          conversationPace: calculatePace(), // 'fast' | 'normal' | 'slow'
+          
+          // Behavioral patterns
+          lookAwayCount: recentEmotions.filter(e => !e.isLookingAtScreen).length,
+          emotionChanges: detectEmotionChanges(recentEmotions),
+        };
         
         aiResponse = await generateAIResponse(
           conversationId,
           currentUser.uid,
           levelId,
           cleanedText,
-          emotionContext // Pass emotion context to AI
+          emotionContext // Pass comprehensive emotion context to AI
         );
         
         // Validate AI response
@@ -1054,6 +1155,29 @@ export default function ConversationPractice() {
           </div>
         </div>
       </div>
+
+      {/* Emotion Awareness Display */}
+      {currentEmotion && (
+        <div className="fixed top-20 right-4 bg-white/90 backdrop-blur rounded-2xl p-4 shadow-lg z-40">
+          <div className="flex items-center gap-3">
+            <div className="text-3xl">
+              {currentEmotion.currentEmotion === 'happy' ? '😊' :
+               currentEmotion.currentEmotion === 'sad' ? '😢' :
+               currentEmotion.currentEmotion === 'angry' ? '😤' :
+               currentEmotion.currentEmotion === 'surprised' ? '😲' :
+               currentEmotion.currentEmotion === 'fearful' ? '😰' : '😐'}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-800">
+                {birdCharacter?.name} notices:
+              </p>
+              <p className="text-xs text-gray-600">
+                {getEmotionMessage(currentEmotion)}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Conversation Area */}
       <div className="relative z-10 flex-1 overflow-y-auto pb-32">
