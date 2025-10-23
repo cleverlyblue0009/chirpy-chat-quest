@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 
-const { readFileSync } = require('fs');
-const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID;
+const execPromise = promisify(exec);
 
 if (!projectId) {
   console.error('❌ Missing Firebase project ID in .env');
@@ -19,9 +28,6 @@ async function deployRules() {
     console.log('🔧 Deploying Firestore rules to project:', projectId);
     
     // Using Firebase REST API to deploy rules
-    const { exec } = require('child_process');
-    const util = require('util');
-    const execPromise = util.promisify(exec);
     
     // First, let's try to use gcloud if available, otherwise fall back to manual update notice
     try {
