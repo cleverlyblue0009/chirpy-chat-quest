@@ -12,7 +12,8 @@ import {
   doc, 
   onSnapshot, 
   addDoc, 
-  updateDoc, 
+  updateDoc,
+  setDoc, 
   getDoc,
   Timestamp 
 } from "firebase/firestore";
@@ -144,8 +145,8 @@ export default function ConversationPractice() {
     if (!currentUser) return;
     
     try {
-      // Save consent to Firestore
-      await updateDoc(doc(db, 'parental_consent', currentUser.uid), {
+      // Save consent to Firestore using setDoc (creates or updates)
+      await setDoc(doc(db, 'parental_consent', currentUser.uid), {
         ...consent,
         userId: currentUser.uid,
         timestamp: Timestamp.now(),
