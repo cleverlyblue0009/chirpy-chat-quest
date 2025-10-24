@@ -66,6 +66,32 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
     onPermissionChange?.(cameraState);
   }, [cameraState, onPermissionChange]);
   
+  // Detection loop
+  const startDetectionLoop = useCallback(() => {
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+    }
+    
+    const detectEmotions = async () => {
+      if (!faceServiceRef.current || !videoRef.current || !webcamConfig.enabled) {
+        return;
+      }
+      
+      const analysis = await faceServiceRef.current.detectEmotions(videoRef.current);
+      
+      if (analysis) {
+        setCurrentEmotion(analysis);
+        onEmotionDetected?.(analysis);
+      }
+    };
+    
+    // Initial detection
+    detectEmotions();
+    
+    // Set up interval
+    detectionIntervalRef.current = setInterval(detectEmotions, webcamConfig.detectionInterval);
+  }, [webcamConfig.enabled, webcamConfig.detectionInterval, onEmotionDetected]);
+  
   // Start camera and detection
   const startCamera = useCallback(async () => {
     // Check if face service is initialized
@@ -92,15 +118,52 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
         videoRef.current.srcObject = stream;
         
         // Wait for video to be ready before playing
-        await new Promise<void>((resolve) => {
-          if (videoRef.current) {
-            videoRef.current.onloadedmetadata = () => resolve();
-          } else {
+        await new Promise<void>((resolve, reject) => {
+          if (!videoRef.current) {
             resolve();
+            return;
           }
+          
+          const video = videoRef.current;
+          
+          // Check if metadata is already loaded
+          if (video.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+            resolve();
+            return;
+          }
+          
+          // Set up event listeners
+          const onLoadedMetadata = () => {
+            video.removeEventListener('loadedmetadata', onLoadedMetadata);
+            video.removeEventListener('error', onError);
+            resolve();
+          };
+          
+          const onError = (e: Event) => {
+            video.removeEventListener('loadedmetadata', onLoadedMetadata);
+            video.removeEventListener('error', onError);
+            reject(new Error('Video element error: ' + (e as any).message));
+          };
+          
+          video.addEventListener('loadedmetadata', onLoadedMetadata);
+          video.addEventListener('error', onError);
+          
+          // Timeout after 5 seconds
+          setTimeout(() => {
+            video.removeEventListener('loadedmetadata', onLoadedMetadata);
+            video.removeEventListener('error', onError);
+            reject(new Error('Timeout waiting for video metadata'));
+          }, 5000);
         });
         
-        await videoRef.current.play();
+        // Ensure video is playing
+        try {
+          await videoRef.current.play();
+          console.log('✅ Video is now playing');
+        } catch (playError) {
+          console.error('Error playing video:', playError);
+          throw new Error('Failed to play video: ' + (playError as Error).message);
+        }
       }
       
       setCameraState({ status: 'granted' });
@@ -147,32 +210,6 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
     setWebcamConfig(prev => ({ ...prev, enabled: false }));
     setCurrentEmotion(null);
   }, []);
-  
-  // Detection loop
-  const startDetectionLoop = useCallback(() => {
-    if (detectionIntervalRef.current) {
-      clearInterval(detectionIntervalRef.current);
-    }
-    
-    const detectEmotions = async () => {
-      if (!faceServiceRef.current || !videoRef.current || !webcamConfig.enabled) {
-        return;
-      }
-      
-      const analysis = await faceServiceRef.current.detectEmotions(videoRef.current);
-      
-      if (analysis) {
-        setCurrentEmotion(analysis);
-        onEmotionDetected?.(analysis);
-      }
-    };
-    
-    // Initial detection
-    detectEmotions();
-    
-    // Set up interval
-    detectionIntervalRef.current = setInterval(detectEmotions, webcamConfig.detectionInterval);
-  }, [webcamConfig.enabled, webcamConfig.detectionInterval, onEmotionDetected]);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -302,6 +339,8 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
                   autoPlay
                   playsInline
                   muted
+                  width="320"
+                  height="240"
                 />
                 
                 {/* Emotion Overlay */}
