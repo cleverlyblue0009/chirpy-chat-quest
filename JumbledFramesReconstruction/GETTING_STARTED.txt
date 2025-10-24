@@ -1,0 +1,178 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                                                                          ║
+║     JUMBLED FRAMES RECONSTRUCTION - GETTING STARTED                      ║
+║     Optical Flow-Based Video Frame Reconstruction                        ║
+║                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+🎉 Welcome! Your project is ready to use.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 QUICK START (3 Steps)
+
+  1. Install dependencies:
+     $ pip install -r requirements.txt
+
+  2. Place your jumbled video:
+     $ cp your_video.mp4 jumbled_video.mp4
+
+  3. Run reconstruction:
+     $ python main.py
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📖 DOCUMENTATION
+
+  • QUICKSTART.md          → 5-minute beginner guide
+  • README.md              → Complete documentation
+  • USAGE_EXAMPLES.md      → Command examples
+  • PROJECT_SUMMARY.md     → Technical overview
+  • SETUP_VERIFICATION.md  → Verify installation
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🧪 TEST YOUR INSTALLATION
+
+  $ python test_installation.py
+
+  This will verify all dependencies are properly installed.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📁 PROJECT STRUCTURE
+
+  JumbledFramesReconstruction/
+  ├── src/                      ← Core modules (6 files)
+  │   ├── extract_frames.py         • Frame extraction
+  │   ├── optical_flow_similarity.py • Optical flow computation
+  │   ├── reconstruct_sequence.py    • Reconstruction algorithm
+  │   ├── video_builder.py           • Video generation
+  │   ├── visualize_flow.py          • Flow visualization
+  │   └── utils.py                   • Utilities
+  │
+  ├── frames/                   ← Extracted frames (auto-generated)
+  ├── output/                   ← Results (auto-generated)
+  │
+  ├── main.py                   ← Main entry point
+  ├── test_installation.py      ← Installation test
+  └── requirements.txt          ← Dependencies
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚡ COMMAND EXAMPLES
+
+  # Basic reconstruction
+  python main.py
+
+  # Custom input video
+  python main.py --input my_video.mp4
+
+  # With optical flow visualizations
+  python main.py --visualize
+
+  # Full analysis with heatmap
+  python main.py --visualize --heatmap
+
+  # Custom FPS
+  python main.py --fps 60
+
+  # Show all options
+  python main.py --help
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔬 WHAT IT DOES
+
+  1. EXTRACTS frames from your shuffled video
+  2. COMPUTES optical flow between all frame pairs
+  3. RECONSTRUCTS the correct temporal order using motion analysis
+  4. REBUILDS the video with frames in correct sequence
+  5. GENERATES visualizations and logs
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 OUTPUT FILES
+
+  After running main.py, check the output/ folder:
+
+  ✓ reconstructed_video.mp4      → Your reconstructed video!
+  ✓ frame_order.txt              → Frame reconstruction order
+  ✓ execution_log.txt            → Performance statistics
+  ✓ optical_flow_example.png     → Flow visualization (if --visualize)
+  ✓ similarity_heatmap.png       → Similarity matrix (if --heatmap)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎓 ALGORITHM
+
+  Uses FARNEBACK OPTICAL FLOW to detect motion between frames.
+
+  Frames with similar motion patterns are likely consecutive in time.
+
+  The algorithm:
+    1. Starts with any frame
+    2. Finds the most similar frame (by motion)
+    3. Adds it to the sequence
+    4. Repeats until all frames are ordered
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🐛 TROUBLESHOOTING
+
+  Error: "No module named 'cv2'"
+  → Fix: pip install opencv-python
+
+  Error: "Video file not found"
+  → Fix: python main.py --input /full/path/to/video.mp4
+
+  Error: "Out of memory"
+  → Fix: Use a shorter video for testing
+
+  Need Help?
+  → Run: python test_installation.py
+  → Read: SETUP_VERIFICATION.md
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✨ FEATURES
+
+  ✓ Clean, modular Python code
+  ✓ Well-documented with docstrings
+  ✓ Progress bars for long operations
+  ✓ Comprehensive error handling
+  ✓ Optical flow visualizations
+  ✓ Performance logging
+  ✓ Command-line interface
+  ✓ Professional project structure
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 TIPS
+
+  • Start with a short video (3-5 seconds) to test
+  • Higher quality input = better results
+  • Use --visualize to understand the algorithm
+  • Check execution_log.txt for performance stats
+  • Read the full README.md for deep dive
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📞 SUPPORT
+
+  • Documentation: README.md, QUICKSTART.md
+  • Test script: python test_installation.py
+  • Help command: python main.py --help
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎊 You're ready! Start with:
+
+     $ python test_installation.py      # Verify installation
+     $ python main.py --help            # See all options
+     $ python main.py                   # Run reconstruction!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Happy Reconstructing! 🎬✨
+
