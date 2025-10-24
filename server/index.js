@@ -52,12 +52,12 @@ const elevenlabs = new elevenLabsModule.ElevenLabsClient({
 
 // Voice IDs for different bird characters
 const BIRD_VOICES = {
-  ruby_robin: 'EXAVITQu4vr4xnSDxMaL', // Rachel voice
-  sage_owl: 'ErXwobaYiN019PkySvjV', // Antoni voice
-  charlie_sparrow: 'TxGEqnHWrfWFTfGW9XjX', // Josh voice
-  harmony_hawk: 'MF3mGyEYCl7XYWbV9V6O', // Bella voice
-  luna_lark: 'EXAVITQu4vr4xnSDxMaL', // Elli voice
-  phoenix_finch: 'pNInz6obpgDQGcFmaJgB', // Adam voice
+  ruby_robin: 'EXAVITQu4vr4xnSDxMaL',
+  sage_owl: 'ErXwobaYiN019PkySvjV',
+  charlie_sparrow: 'TxGEqnHWrfWFTfGW9XjX',
+  harmony_hawk: 'MF3mGyEYCl7XYWbV9V6O',
+  luna_lark: 'EXAVITQu4vr4xnSDxMaL',
+  phoenix_finch: 'pNInz6obpgDQGcFmaJgB',
 };
 
 // ======================
@@ -70,6 +70,8 @@ function buildAdaptiveInstructions(emotionContext) {
     return "The child is engaged and ready to learn.";
   }
   
+  console.log('🎯 Building adaptive instructions from emotion context:', emotionContext);
+  
   let instructions = [];
   
   // Detect struggling
@@ -79,6 +81,7 @@ function buildAdaptiveInstructions(emotionContext) {
     instructions.push("- Use only 1 short sentence");
     instructions.push("- Offer a specific, easy example");
     instructions.push("- Ask if they want help");
+    console.log('⚠️ Child struggling detected');
   }
   
   // Low engagement
@@ -87,6 +90,7 @@ function buildAdaptiveInstructions(emotionContext) {
     instructions.push("- Make response more exciting and playful");
     instructions.push("- Use their name");
     instructions.push("- Add an element of fun or surprise");
+    console.log('⚠️ Low engagement detected');
   }
   
   // Not looking at screen
@@ -96,6 +100,7 @@ function buildAdaptiveInstructions(emotionContext) {
     instructions.push("- Keep next response VERY short (1 sentence)");
     instructions.push("- Offer a break option");
     instructions.push("- Use calming, gentle tone");
+    console.log('⚠️ Attention drift detected');
   }
   
   // Frustrated or upset
@@ -105,23 +110,26 @@ function buildAdaptiveInstructions(emotionContext) {
     instructions.push("- Reassure them it's okay to struggle");
     instructions.push("- Offer to try something easier");
     instructions.push("- Use soothing language");
+    console.log('⚠️ Emotional distress detected:', emotionContext.currentEmotion);
   }
   
   // Confused
-  if (emotionContext.currentEmotion === 'surprise' || emotionContext.needsSimplification) {
+  if (emotionContext.currentEmotion === 'surprised' || emotionContext.needsSimplification) {
     instructions.push("⚠️ CONFUSION DETECTED:");
     instructions.push("- Break down the previous concept");
     instructions.push("- Give a concrete example");
     instructions.push("- Use simpler words");
+    console.log('⚠️ Confusion detected');
   }
   
   // Taking long to respond
-  if (emotionContext.processingTime > 10000) { // 10+ seconds
+  if (emotionContext.processingTime > 10000) {
     instructions.push("ℹ️ SLOW PROCESSING:");
     instructions.push("- Child needs more time");
     instructions.push("- Don't rush them");
     instructions.push("- Acknowledge they're thinking");
     instructions.push("- Provide encouragement to take their time");
+    console.log('ℹ️ Slow processing time:', emotionContext.processingTime);
   }
   
   // High engagement - doing great!
@@ -131,33 +139,32 @@ function buildAdaptiveInstructions(emotionContext) {
     instructions.push("- Child is confident and engaged");
     instructions.push("- You can maintain current difficulty");
     instructions.push("- Celebrate their success enthusiastically");
+    console.log('✅ Excellent engagement');
   }
   
   if (instructions.length === 0) {
+    console.log('ℹ️ No special instructions needed - child is ready');
     return "The child appears calm and ready. Proceed normally.";
   }
   
-  return instructions.join('\n');
+  const result = instructions.join('\n');
+  console.log('📋 Generated adaptive instructions:\n', result);
+  return result;
 }
 
 // Enforce autism-friendly response format
 function enforceAutismFriendlyFormat(response) {
-  // Split into sentences
   let sentences = response.match(/[^.!?]+[.!?]+/g) || [response];
   
-  // Remove any sentences beyond 2
   if (sentences.length > 2) {
     sentences = sentences.slice(0, 2);
   }
   
-  // If sentences are too long, simplify
   sentences = sentences.map(sentence => {
     sentence = sentence.trim();
     
-    // If sentence is over 15 words, try to simplify
     const words = sentence.split(/\s+/);
     if (words.length > 15) {
-      // Take first clause only
       const firstClause = sentence.split(/,|;/)[0];
       return firstClause + (firstClause.endsWith('.') || firstClause.endsWith('!') || firstClause.endsWith('?') ? '' : '.');
     }
@@ -170,12 +177,10 @@ function enforceAutismFriendlyFormat(response) {
 
 // Ensure friendly tone
 function ensureFriendlyTone(response, birdName) {
-  // Add warmth if response feels clinical
   const warmWords = ['great', 'wonderful', 'awesome', 'nice', 'good'];
   const hasWarmth = warmWords.some(word => response.toLowerCase().includes(word));
   
   if (!hasWarmth && Math.random() > 0.5) {
-    // Add encouraging prefix
     const encouragements = [
       "You're doing great! ",
       "Wonderful! ",
@@ -195,6 +200,14 @@ function ensureFriendlyTone(response, birdName) {
 app.post('/api/chat', async (req, res) => {
   try {
     const { conversationId, userId, levelId, userMessage, systemPrompt, analysisData, emotionContext } = req.body;
+
+    console.log('📨 Chat request received:', {
+      conversationId,
+      userId,
+      levelId,
+      hasEmotionContext: !!emotionContext,
+      emotionData: emotionContext
+    });
 
     if (!conversationId || !userId || !levelId || !userMessage) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -230,6 +243,8 @@ app.post('/api/chat', async (req, res) => {
 
     // Build adaptive system prompt based on emotion context
     const adaptiveInstructions = buildAdaptiveInstructions(emotionContext);
+    
+    console.log('🤖 Emotion-aware instructions generated');
     
     // Use provided system prompt or create enhanced default
     const enhancedSystemPrompt = systemPrompt || `
@@ -268,15 +283,17 @@ app.post('/api/chat', async (req, res) => {
       ${shouldEnd ? 'Wrap up in ONE warm sentence thanking them.' : ''}
     `;
 
+    console.log('📝 System prompt prepared with emotion awareness');
+
     // Initialize the Gemini model
     const model = genAI.getGenerativeModel({ 
       model: "gemini-2.0-flash",
       generationConfig: {
-        temperature: 0.8, // Slightly higher for more complete responses
-        maxOutputTokens: 200, // Increased to ensure complete responses
+        temperature: 0.8,
+        maxOutputTokens: 200,
         topP: 0.95,
         topK: 40,
-        stopSequences: [], // Don't use stop sequences that might cut off responses
+        stopSequences: [],
       }
     });
 
@@ -295,47 +312,13 @@ app.post('/api/chat', async (req, res) => {
       ],
     });
 
-    // Helper function to validate response completeness
-    const validateResponse = (response) => {
-      // Check for incomplete response patterns
-      const incompletePatterns = [
-        /^(yes|sure|okay|alright),?\s*(i can help|let me help|i'll help)/i,
-        /^(yes|sure|okay|of course)[,.!]?\s*$/i, // Very short yes responses
-        /can help you with that\.?$/i,
-        /let me (help|assist) you\.?$/i,
-        /^(i (will|would|can))[,.!]?\s*$/i,
-        /^(certainly|definitely|absolutely)[,.!]?\s*$/i
-      ];
-      
-      const isIncomplete = incompletePatterns.some(pattern => pattern.test(response.trim()));
-      const sentences = response.trim().split(/[.!?]/).filter(s => s.trim().length > 3);
-      const isTooShort = sentences.length < 2;
-      
-      return !isIncomplete && !isTooShort;
-    };
-    
-    // Helper function to get contextual guidance
-    const getContextualGuidance = () => {
-      const topicGuidance = {
-        'greeting': "You can wave and say 'Hi!' or 'Hello!' with a smile. That's a great way to greet someone! Would you like to try?",
-        'introduction': "You can say 'My name is [your name]' and ask 'What's your name?' That helps you get to know someone! Want to practice?",
-        'turn-taking': "In conversations, we take turns - you speak, then I speak, then you speak again. It's like playing catch! Ready to try?",
-        'emotion': "You can share how you feel by saying 'I feel happy' or 'I feel excited!' How are you feeling right now?",
-      };
-      
-      // Check which topic applies based on level conversation topics
-      for (const [topic, guidance] of Object.entries(topicGuidance)) {
-        if (level.conversation_topics?.some(t => t.toLowerCase().includes(topic))) {
-          return guidance;
-        }
-      }
-      
-      return "Keep practicing - you're doing great! Every conversation helps you learn. What would you like to talk about?";
-    };
+    console.log('🚀 Sending message to Gemini AI');
 
     // Generate response using Gemini
     let result = await chat.sendMessage(userMessage);
     let aiResponse = result.response.text();
+    
+    console.log('✨ Raw Gemini response:', aiResponse);
     
     // Enforce autism-friendly format
     aiResponse = enforceAutismFriendlyFormat(aiResponse);
@@ -343,7 +326,7 @@ app.post('/api/chat', async (req, res) => {
     // Ensure friendly tone
     aiResponse = ensureFriendlyTone(aiResponse, birdCharacter.name);
     
-    console.log('✅ Final Gemini response:', aiResponse);
+    console.log('✅ Final processed response:', aiResponse);
 
     // Calculate autism-aware scores (always encouraging)
     const scores = {
@@ -356,7 +339,6 @@ app.post('/api/chat', async (req, res) => {
                   analysisData?.engagement_level === 'high' ? 95 : 
                   analysisData?.engagement_level === 'low' ? 65 : 80,
       skillDemonstration: analysisData?.strategy_used?.length ? analysisData.strategy_used.length * 20 : 70,
-      // Add emotion-based bonus for trying despite struggles
       effortBonus: emotionContext?.needsSupport ? 15 : 0
     };
     
@@ -377,6 +359,8 @@ app.post('/api/chat', async (req, res) => {
     
     // Ensure minimum score of 60 for encouragement
     const overallScore = Math.max(60, Math.floor(weightedSum));
+
+    console.log('📊 Calculated scores:', { overallScore, scores });
 
     // Generate autism-aware, strength-based feedback
     let feedback = '';
@@ -404,6 +388,8 @@ app.post('/api/chat', async (req, res) => {
     
     feedback += "Keep going, you're doing great!";
 
+    console.log('💬 Generated feedback:', feedback);
+
     // Save user message to Firestore
     const userMessageData = {
       sender: 'user',
@@ -430,9 +416,11 @@ app.post('/api/chat', async (req, res) => {
       } : {})
     });
 
+    console.log('💾 Conversation updated in Firestore');
+
     res.json({
       response: aiResponse,
-      text: aiResponse, // Add text field for compatibility
+      text: aiResponse,
       birdCharacter: level.bird_character,
       tone: analysisData?.emotional_content?.includes('sad') ? 'calming' :
             analysisData?.engagement_level === 'high' ? 'playful' :
@@ -444,9 +432,12 @@ app.post('/api/chat', async (req, res) => {
       hints: analysisData?.needs_support ? 
         ['Try saying hello', 'Tell me how you feel', 'You can take your time'] : undefined,
     });
+
+    console.log('✅ Response sent successfully');
   } catch (error) {
-    console.error('Chat API error:', error);
-    res.status(500).json({ error: 'Failed to generate response' });
+    console.error('❌ Chat API error:', error);
+    console.error('Error details:', error.message, error.stack);
+    res.status(500).json({ error: 'Failed to generate response', details: error.message });
   }
 });
 
@@ -464,8 +455,8 @@ app.post('/api/tts', async (req, res) => {
     // Get the appropriate voice ID
     const voiceId = BIRD_VOICES[birdCharacter] || BIRD_VOICES.ruby_robin;
     
-    console.log('Generating speech for text:', text.substring(0, 50) + '...');
-    console.log('Using voice ID:', voiceId);
+    console.log('🎤 Generating speech for text:', text.substring(0, 50) + '...');
+    console.log('🗣️ Using voice ID:', voiceId);
 
     try {
       // Generate audio using ElevenLabs
@@ -500,14 +491,13 @@ app.post('/api/tts', async (req, res) => {
       // Return the URL to access the audio file
       const audioUrl = `/audio/${fileName}`;
       
-      console.log('Audio generated successfully:', audioUrl);
+      console.log('✅ Audio generated successfully:', audioUrl);
       res.json({ audioUrl });
       
     } catch (elevenLabsError) {
-      console.error('ElevenLabs API error:', elevenLabsError);
+      console.error('❌ ElevenLabs API error:', elevenLabsError);
       
       // Fallback: Use browser's text-to-speech as a backup
-      // Return a special marker that tells the frontend to use browser TTS
       res.json({ 
         audioUrl: null, 
         useBrowserTTS: true,
@@ -515,8 +505,8 @@ app.post('/api/tts', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('TTS API error:', error);
-    console.error('Full error details:', error.message, error.stack);
+    console.error('❌ TTS API error:', error);
+    console.error('Error details:', error.message, error.stack);
     res.status(500).json({ error: 'Failed to generate speech', details: error.message });
   }
 });
@@ -532,23 +522,13 @@ app.post('/api/stt', async (req, res) => {
       return res.status(400).json({ error: 'Audio URL is required' });
     }
 
-    // Note: This endpoint is not currently used by the frontend
-    // The app uses Web Speech API directly in the browser for better real-time performance
-    // This endpoint is kept for potential future use with Deepgram/Google Speech-to-Text
-    
-    // If we were to implement this, we would:
-    // 1. Download the audio from the URL
-    // 2. Send it to Deepgram API using the configured DEEPGRAM_API_KEY
-    // 3. Return the actual transcription
-    
-    // For now, return an error indicating this endpoint is not implemented
     res.status(501).json({ 
       error: 'Speech-to-text endpoint not implemented',
       message: 'The application uses Web Speech API in the browser instead',
       alternative: 'Use the browser\'s built-in speech recognition'
     });
   } catch (error) {
-    console.error('STT API error:', error);
+    console.error('❌ STT API error:', error);
     res.status(500).json({ error: 'Failed to transcribe speech' });
   }
 });
@@ -570,7 +550,7 @@ app.post('/api/pronunciation', async (req, res) => {
 
     res.json({ score, feedback });
   } catch (error) {
-    console.error('Pronunciation API error:', error);
+    console.error('❌ Pronunciation API error:', error);
     res.status(500).json({ error: 'Failed to analyze pronunciation' });
   }
 });
@@ -686,13 +666,21 @@ app.post('/api/assessment/score', async (req, res) => {
       averageScore,
     });
   } catch (error) {
-    console.error('Assessment scoring error:', error);
+    console.error('❌ Assessment scoring error:', error);
     res.status(500).json({ error: 'Failed to score assessment' });
   }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Start server
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`🎤 ElevenLabs API configured: ${!!process.env.ELEVENLABS_API_KEY}`);
+  console.log(`🤖 Gemini AI configured: ${!!process.env.GEMINI_API_KEY}`);
+  console.log(`🔥 Firebase configured: ${!!process.env.FIREBASE_ADMIN_PROJECT_ID}`);
 });

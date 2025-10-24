@@ -70,6 +70,7 @@ export default function ConversationPractice() {
   const [showEmotionDetector, setShowEmotionDetector] = useState(false);
   const [strugglingSignals, setStrugglingSignals] = useState<StrugglingSignals | null>(null);
   const [lastEmotionFeedback, setLastEmotionFeedback] = useState<string | null>(null);
+  const [emotionDetectorEnabled, setEmotionDetectorEnabled] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -77,11 +78,10 @@ export default function ConversationPractice() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Remove hard limit - let AI determine when conversation is complete based on skill mastery
   const [skillsMastered, setSkillsMastered] = useState(false);
   const [conversationExchanges, setConversationExchanges] = useState(0);
-  const minExchanges = 8; // Minimum exchanges to ensure proper training
-  const maxExchanges = 20; // Maximum to prevent overly long sessions
+  const minExchanges = 8;
+  const maxExchanges = 20;
   const progress = Math.min((conversationExchanges / minExchanges) * 100, 100);
 
   // Check for existing parental consent on mount
@@ -96,16 +96,14 @@ export default function ConversationPractice() {
           setParentalConsent(consent);
           if (consent.features.facialDetection) {
             setShowEmotionDetector(true);
-            console.log('Facial detection enabled for user');
+            console.log('✅ Facial detection authorized by parent');
           }
         } else {
-          // Show consent modal after a short delay to let page load
-          console.log('No parental consent found, will show modal');
+          console.log('ℹ️ No parental consent found, will show modal');
           setTimeout(() => setShowConsentModal(true), 2000);
         }
       } catch (error: any) {
         console.error('Error checking parental consent:', error);
-        // Continue without emotion detection if there's an error
         if (error.code === 'unavailable') {
           console.warn('Firestore unavailable, skipping parental consent check');
         }
@@ -115,24 +113,32 @@ export default function ConversationPractice() {
     checkParentalConsent();
   }, [currentUser]);
   
-  // Handle emotion detection
+  // Handle emotion detection with enhanced logging
   const handleEmotionDetected = useCallback((analysis: EmotionAnalysis) => {
+    console.log('🎭 Emotion detected:', {
+      emotion: analysis.currentEmotion,
+      confidence: analysis.confidence,
+      lookingAtScreen: analysis.isLookingAtScreen,
+      engagement: analysis.engagementLevel
+    });
+    
     setCurrentEmotion(analysis);
     
     // Add to history
     setEmotionHistory(prev => {
-      const updated = [...prev, analysis].slice(-10); // Keep last 10 readings
+      const updated = [...prev, analysis].slice(-10);
       
       // Analyze for struggling patterns
       const signals = FaceDetectionService.analyzeEmotionHistory(updated);
       setStrugglingSignals(signals);
       
+      console.log('📊 Struggling signals:', signals);
+      
       // Generate supportive feedback if needed
       const feedback = FaceDetectionService.generateEmotionFeedback(analysis, signals);
       if (feedback && feedback !== lastEmotionFeedback) {
         setLastEmotionFeedback(feedback);
-        // Show supportive message (could be displayed in UI or sent to bird)
-        console.log('Emotion feedback:', feedback);
+        console.log('💬 Emotion feedback generated:', feedback);
       }
       
       return updated;
@@ -144,7 +150,6 @@ export default function ConversationPractice() {
     if (!currentUser) return;
     
     try {
-      // Save consent to Firestore
       await updateDoc(doc(db, 'parental_consent', currentUser.uid), {
         ...consent,
         userId: currentUser.uid,
@@ -173,7 +178,6 @@ export default function ConversationPractice() {
 
   // Initialize Web Speech API
   useEffect(() => {
-    // Check browser compatibility
     const checkSpeechRecognitionSupport = () => {
       if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
         console.log('Speech recognition not supported in this browser');
@@ -185,7 +189,6 @@ export default function ConversationPractice() {
         return false;
       }
       
-      // Check if we're on HTTPS (required for speech recognition)
       if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
         console.log('Speech recognition requires HTTPS');
         toast({
@@ -218,10 +221,8 @@ export default function ConversationPractice() {
         });
       }
       
-      // Test microphone permission on component mount
       navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {
-          // Permission granted, stop the stream immediately
           stream.getTracks().forEach(track => track.stop());
           console.log('Microphone permission granted');
         })
@@ -246,7 +247,6 @@ export default function ConversationPractice() {
           const level = levelDoc.data();
           setLevelData(level);
           
-          // Load bird character
           const birdDoc = await getDoc(doc(db, 'bird_characters', level.bird_character));
           if (birdDoc.exists()) {
             setBirdCharacter({ id: level.bird_character, ...birdDoc.data() });
@@ -273,7 +273,6 @@ export default function ConversationPractice() {
       try {
         setIsLoading(true);
         
-        // Create new conversation document
         const conversationRef = await addDoc(collection(db, 'conversations'), {
           user_id: currentUser.uid,
           level_id: levelId,
@@ -282,8 +281,8 @@ export default function ConversationPractice() {
         });
         
         setConversationId(conversationRef.id);
+        console.log('✅ Conversation initialized:', conversationRef.id);
         
-        // Generate initial greeting from API
         let greetingData;
         try {
           greetingData = await generateInitialGreeting(levelId);
@@ -298,32 +297,27 @@ export default function ConversationPractice() {
           return;
         }
         
-        // Generate audio for greeting
         let audioUrl: string | undefined;
         try {
           audioUrl = await generateSpeech(greetingData.text, greetingData.birdCharacter, conversationRef.id);
         } catch (error) {
           console.error('Failed to generate greeting audio:', error);
-          // Continue without audio
         }
         
-        // Add initial message
-      const initialMessage: Message = {
-        sender: 'bird',
-        text: greetingData.text,
-        timestamp: Timestamp.now(),
-      };
-      
-      // Only add audio_url if it exists
-      if (audioUrl) {
-        initialMessage.audio_url = audioUrl;
-      }
+        const initialMessage: Message = {
+          sender: 'bird',
+          text: greetingData.text,
+          timestamp: Timestamp.now(),
+        };
+        
+        if (audioUrl) {
+          initialMessage.audio_url = audioUrl;
+        }
         
         await updateDoc(conversationRef, {
           messages: [initialMessage]
         });
         
-        // Play the greeting
         if (audioUrl) {
           playAudioWithAnimation(
             audioUrl,
@@ -357,7 +351,6 @@ export default function ConversationPractice() {
           const data = doc.data();
           setMessages(data.messages || []);
           
-          // Check if conversation is complete
           if (data.completed_at) {
             handleConversationComplete(data.score, data.feedback);
           }
@@ -379,7 +372,6 @@ export default function ConversationPractice() {
   // Start recording audio
   const startRecording = async () => {
     try {
-      // Check if already recording
       if (isRecording) {
         console.log('Already recording');
         return;
@@ -387,7 +379,6 @@ export default function ConversationPractice() {
       
       console.log('Starting recording process...');
       
-      // Get microphone access with error handling
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
@@ -398,7 +389,6 @@ export default function ConversationPractice() {
       streamRef.current = stream;
       console.log('Got media stream:', stream.getAudioTracks().length, 'audio tracks');
       
-      // Start MediaRecorder for audio recording
       mediaRecorderRef.current = new MediaRecorder(stream);
       audioChunksRef.current = [];
       
@@ -413,14 +403,12 @@ export default function ConversationPractice() {
       setIsRecording(true);
       console.log('MediaRecorder started');
       
-      // Start speech recognition
       if (recognitionRef.current && !useTextInput) {
         let speechTimeout: NodeJS.Timeout;
         let hasSpokenSomething = false;
         
         recognitionRef.current.onstart = () => {
           console.log('Speech recognition started');
-          // Set a timeout for no speech detection
           speechTimeout = setTimeout(() => {
             if (!hasSpokenSomething) {
               toast({
@@ -466,7 +454,6 @@ export default function ConversationPractice() {
         recognitionRef.current.onerror = (event: any) => {
           console.error('Speech recognition error:', event.error);
           
-          // Handle different error types
           if (event.error === 'no-speech') {
             toast({
               title: "No speech detected",
@@ -492,7 +479,6 @@ export default function ConversationPractice() {
             });
           }
           
-          // Only switch to text input for critical errors
           if (event.error !== 'no-speech') {
             setUseTextInput(true);
           }
@@ -523,7 +509,6 @@ export default function ConversationPractice() {
       console.log('Stopping recording, transcript:', transcript);
       setIsRecording(false);
       
-      // Stop speech recognition
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -532,7 +517,6 @@ export default function ConversationPractice() {
         }
       }
       
-      // Stop media recorder and get audio blob
       let audioBlob: Blob | null = null;
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
@@ -551,13 +535,11 @@ export default function ConversationPractice() {
         }
       }
       
-      // Stop all tracks
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
       
-      // If no transcript from speech recognition, show text input
       if (!transcript && !useTextInput) {
         setUseTextInput(true);
         toast({
@@ -567,7 +549,6 @@ export default function ConversationPractice() {
         return;
       }
       
-      // Process the user's message
       if (transcript && transcript.trim()) {
         console.log('Processing message with transcript:', transcript);
         await processUserMessage(transcript.trim(), audioBlob || undefined);
@@ -582,107 +563,92 @@ export default function ConversationPractice() {
     }
   };
 
-  // Helper functions for emotion analysis
-  const calculateEngagement = (emotions: EmotionAnalysis[]) => {
-    if (emotions.length === 0) return 'medium';
-    
-    const lookingAtScreen = emotions.filter(e => e.isLookingAtScreen).length;
-    const percentage = (lookingAtScreen / emotions.length) * 100;
-    
-    if (percentage >= 70) return 'high';
-    if (percentage >= 40) return 'medium';
-    return 'low';
-  };
+  // Build emotion context for AI
+  const buildEmotionContext = () => {
+    if (!emotionDetectorEnabled || !currentEmotion || emotionHistory.length === 0) {
+      return undefined;
+    }
 
-  const detectStruggling = (emotions: EmotionAnalysis[]) => {
-    if (emotions.length < 3) return false;
+    const recentEmotions = emotionHistory.slice(-5);
     
+    // Calculate engagement
+    const lookingAtScreen = recentEmotions.filter(e => e.isLookingAtScreen).length;
+    const engagementPercentage = (lookingAtScreen / recentEmotions.length) * 100;
+    const engagementLevel = engagementPercentage >= 70 ? 'high' : 
+                           engagementPercentage >= 40 ? 'medium' : 'low';
+    
+    // Detect struggling
     const negativeEmotions = ['sad', 'angry', 'fear'];
-    const strugglingCount = emotions.filter(e => 
-      negativeEmotions.includes(e.currentEmotion) || 
-      !e.isLookingAtScreen
+    const strugglingCount = recentEmotions.filter(e => 
+      negativeEmotions.includes(e.currentEmotion) || !e.isLookingAtScreen
     ).length;
+    const isStruggling = strugglingCount >= 3;
     
-    return strugglingCount >= 3;
-  };
-
-  const checkNeedsSimplification = (emotions: EmotionAnalysis[]) => {
-    const recentConfusion = emotions.slice(-3).filter(e => 
+    // Check for confusion
+    const confusionCount = recentEmotions.slice(-3).filter(e => 
       e.currentEmotion === 'surprised' || e.currentEmotion === 'fear'
     ).length;
+    const needsSimplification = confusionCount >= 2;
     
-    return recentConfusion >= 2;
-  };
-
-  const calculateProcessingTime = () => {
-    // Time since last message
-    if (messages.length === 0) return 0;
-    const lastMessage = messages[messages.length - 1];
-    return Date.now() - lastMessage.timestamp.toMillis();
-  };
-
-  const calculatePace = () => {
-    if (messages.length < 4) return 'normal';
+    // Calculate processing time
+    let processingTime = 0;
+    if (messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      processingTime = Date.now() - lastMessage.timestamp.toMillis();
+    }
     
-    const recent = messages.slice(-4);
-    const times = recent.map((msg, i) => {
-      if (i === 0) return 0;
-      return msg.timestamp.toMillis() - recent[i-1].timestamp.toMillis();
-    });
+    // Calculate pace
+    let conversationPace = 'normal';
+    if (messages.length >= 4) {
+      const recent = messages.slice(-4);
+      const times = recent.map((msg, i) => {
+        if (i === 0) return 0;
+        return msg.timestamp.toMillis() - recent[i-1].timestamp.toMillis();
+      });
+      const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+      conversationPace = avgTime < 3000 ? 'fast' : avgTime > 15000 ? 'slow' : 'normal';
+    }
     
-    const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
-    
-    if (avgTime < 3000) return 'fast';
-    if (avgTime > 15000) return 'slow';
-    return 'normal';
-  };
-
-  const detectEmotionChanges = (emotions: EmotionAnalysis[]) => {
-    if (emotions.length < 2) return 0;
-    
-    let changes = 0;
-    for (let i = 1; i < emotions.length; i++) {
-      if (emotions[i].currentEmotion !== emotions[i-1].currentEmotion) {
-        changes++;
+    // Count emotion changes
+    let emotionChanges = 0;
+    for (let i = 1; i < recentEmotions.length; i++) {
+      if (recentEmotions[i].currentEmotion !== recentEmotions[i-1].currentEmotion) {
+        emotionChanges++;
       }
     }
-    return changes;
-  };
-
-  const getEmotionMessage = (emotion: EmotionAnalysis) => {
-    const messages = {
-      happy: "You look happy! 😊",
-      sad: "You seem a bit sad. I'm here for you! 💙",
-      angry: "Feeling frustrated? That's okay! 🤗",
-      surprised: "Something surprising? Let's figure it out! ✨",
-      fear: "It's okay to feel unsure. Take your time! 🌟",
-      neutral: "You're doing great! 👍",
+    
+    const context = {
+      currentEmotion: currentEmotion.currentEmotion,
+      emotionConfidence: currentEmotion.confidence,
+      isLookingAtScreen: currentEmotion.isLookingAtScreen,
+      engagementLevel,
+      isStruggling,
+      needsSimplification,
+      processingTime,
+      conversationPace,
+      lookAwayCount: recentEmotions.filter(e => !e.isLookingAtScreen).length,
+      emotionChanges,
     };
-    return messages[emotion.currentEmotion] || messages.neutral;
+    
+    console.log('🎯 Emotion context for AI:', context);
+    return context;
   };
 
-  // Process user message
+  // Process user message with emotion context
   const processUserMessage = async (text: string, audioBlob?: Blob) => {
     if (!currentUser || !conversationId || !text.trim()) {
-      console.log('Missing required data for processing message:', {
-        currentUser: !!currentUser,
-        conversationId: !!conversationId,
-        text: text.trim()
-      });
+      console.log('Missing required data for processing message');
       return;
     }
     
     try {
       setIsLoading(true);
-      console.log('Processing user message:', text);
+      console.log('📝 Processing user message:', text);
       
-      // Validate and clean user input
-      const cleanedText = validateUserInput(text);
+      const cleanedText = text.trim();
       
-      // Upload audio if available and analyze pronunciation
       let audioUrl: string | undefined;
       let pronunciationScore: number | undefined;
-      let responseAnalysis: any = {};
       
       if (audioBlob) {
         console.log('Uploading audio blob, size:', audioBlob.size);
@@ -691,32 +657,22 @@ export default function ConversationPractice() {
         await uploadBytes(audioRef, audioBlob);
         audioUrl = await getDownloadURL(audioRef);
         
-        // Analyze pronunciation with enhanced accuracy
         pronunciationScore = await analyzePronunciation(audioBlob);
         
-        // Analyze response correctness based on context
-        responseAnalysis = analyzeResponseCorrectness(cleanedText, messages);
+        if (pronunciationScore !== undefined) {
+          showPronunciationFeedback(pronunciationScore);
+        }
       }
       
-      // Add user message to conversation
       const userMessage: Message = {
         sender: 'user',
         text: cleanedText,
         timestamp: Timestamp.now(),
       };
       
-      // Only add optional fields if they have values
-      if (audioUrl) {
-        userMessage.audio_url = audioUrl;
-      }
-      if (pronunciationScore !== undefined) {
-        userMessage.pronunciation_score = pronunciationScore;
-        
-        // Show pronunciation feedback immediately
-        showPronunciationFeedback(pronunciationScore);
-      }
+      if (audioUrl) userMessage.audio_url = audioUrl;
+      if (pronunciationScore !== undefined) userMessage.pronunciation_score = pronunciationScore;
       
-      // Update Firestore with emotion analytics if available
       const conversationRef = doc(db, 'conversations', conversationId);
       const conversationDoc = await getDoc(conversationRef);
       const currentMessages = conversationDoc.data()?.messages || [];
@@ -725,8 +681,8 @@ export default function ConversationPractice() {
         messages: [...currentMessages, userMessage]
       };
       
-      // Add emotion timeline if emotion detection is enabled
-      if (currentEmotion && parentalConsent?.features.emotionTracking) {
+      // Add emotion data if available
+      if (currentEmotion && parentalConsent?.features.emotionTracking && emotionDetectorEnabled) {
         const emotionTimeline = conversationDoc.data()?.emotion_timeline || [];
         emotionTimeline.push({
           timestamp: Date.now(),
@@ -735,7 +691,6 @@ export default function ConversationPractice() {
           struggling: currentEmotion.needsSupport
         });
         
-        // Calculate averages for analytics
         const avgEngagement = emotionHistory.reduce((sum, e) => {
           return sum + (e.engagementLevel === 'high' ? 1 : e.engagementLevel === 'medium' ? 0.5 : 0);
         }, 0) / Math.max(emotionHistory.length, 1);
@@ -749,85 +704,47 @@ export default function ConversationPractice() {
       
       await updateDoc(conversationRef, updateData);
       
-      // Track conversation exchanges for proper training
       setCurrentQuestion(prev => prev + 1);
       const currentExchanges = conversationExchanges + 1;
       setConversationExchanges(currentExchanges);
       
-      // Generate AI response with enhanced context including exchange count and emotion data
+      // Build emotion context for AI
+      const emotionContext = buildEmotionContext();
+      console.log('🤖 Sending to AI with emotion context:', emotionContext ? 'YES' : 'NO');
+      
       let aiResponse;
       try {
-        // Get current emotion data from face detection
-        const currentEmotionData = emotionHistory[emotionHistory.length - 1];
-        
-        // Calculate engagement and struggling indicators
-        const recentEmotions = emotionHistory.slice(-5);
-        const engagementLevel = calculateEngagement(recentEmotions);
-        const isStruggling = detectStruggling(recentEmotions);
-        const needsSimplification = checkNeedsSimplification(recentEmotions);
-        
-        // Prepare comprehensive emotion context
-        const emotionContext = currentEmotionData ? {
-          // Facial expression data
-          currentEmotion: currentEmotionData.currentEmotion || 'neutral',
-          emotionConfidence: currentEmotionData.confidence || 0,
-          isLookingAtScreen: currentEmotionData.isLookingAtScreen !== false,
-          
-          // Calculated insights
-          engagementLevel: engagementLevel, // 'high' | 'medium' | 'low'
-          isStruggling: isStruggling, // boolean
-          needsSimplification: needsSimplification, // boolean
-          
-          // Additional context
-          processingTime: calculateProcessingTime(), // How long since last message
-          conversationPace: calculatePace(), // 'fast' | 'normal' | 'slow'
-          
-          // Behavioral patterns
-          lookAwayCount: recentEmotions.filter(e => !e.isLookingAtScreen).length,
-          emotionChanges: detectEmotionChanges(recentEmotions),
-        } : undefined;
-        
         aiResponse = await generateAIResponse(
           conversationId,
           currentUser.uid,
           levelId,
           cleanedText,
-          emotionContext // Pass comprehensive emotion context to AI
+          emotionContext
         );
         
-        // Validate AI response
         if (!aiResponse || !aiResponse.text) {
           throw new Error('Invalid AI response received');
         }
         
-        // Check for skill mastery (AI determines this based on performance)
         if (aiResponse.skillsMastered) {
           setSkillsMastered(true);
         }
         
-        // Intelligent ending logic: 
-        // - Continue until minimum exchanges for proper training
-        // - Allow ending after minimum if skills are mastered
-        // - Force end at maximum to prevent fatigue
         if (currentExchanges >= maxExchanges) {
           aiResponse.shouldEnd = true;
           aiResponse.feedback = "Wonderful session! You've practiced so much today. Let's continue next time!";
-          aiResponse.score = Math.max(aiResponse.score || 75, 85); // Ensure good score for completing full session
+          aiResponse.score = Math.max(aiResponse.score || 75, 85);
         } else if (currentExchanges >= minExchanges) {
-          // After minimum exchanges, AI can suggest ending if skills are mastered
-          // But don't force it - let child continue if engaged
           if (aiResponse.skillsMastered && !aiResponse.shouldEnd) {
             aiResponse.feedback = (aiResponse.feedback || '') + " You're doing so well! Feel free to continue or finish when ready.";
           }
         } else {
-          // Before minimum exchanges, always continue for proper training
           aiResponse.shouldEnd = false;
         }
         
       } catch (error) {
         console.error('Failed to get AI response:', error);
         
-        // Use fallback response instead of failing completely
         aiResponse = {
           text: getEncouragingFallbackResponse(cleanedText),
           birdCharacter: birdCharacter?.id || 'ruby_robin',
@@ -843,7 +760,6 @@ export default function ConversationPractice() {
         });
       }
       
-      // Generate audio for AI response
       let responseAudioUrl: string | undefined;
       if (aiResponse.text) {
         try {
@@ -854,26 +770,22 @@ export default function ConversationPractice() {
           );
         } catch (error) {
           console.error('Failed to generate speech:', error);
-          // Use browser TTS as fallback
           useBrowserTTS(aiResponse.text);
         }
       }
       
-      // Add bird response to conversation
       const birdMessage: Message = {
         sender: 'bird',
         text: aiResponse.text,
         timestamp: Timestamp.now(),
       };
       
-      // Only add audio_url if it exists
       if (responseAudioUrl) {
         birdMessage.audio_url = responseAudioUrl;
       }
       
       const updatedMessages = [...currentMessages, userMessage, birdMessage];
       
-      // Update conversation with bird response
       await updateDoc(conversationRef, {
         messages: updatedMessages,
         ...(aiResponse.shouldEnd ? {
@@ -883,7 +795,6 @@ export default function ConversationPractice() {
         } : {})
       });
       
-      // Play bird response
       if (responseAudioUrl) {
         playAudioWithAnimation(
           responseAudioUrl,
@@ -891,18 +802,11 @@ export default function ConversationPractice() {
           () => setIsBirdSpeaking(false)
         ).catch(console.error);
       } else {
-        // If no audio URL, still animate the bird speaking
         setIsBirdSpeaking(true);
         setTimeout(() => setIsBirdSpeaking(false), 2000);
       }
       
-      // Clear text input
       setTextInput("");
-      
-      // Show response correctness feedback
-      if (responseAnalysis.isCorrect !== undefined) {
-        showResponseFeedback(responseAnalysis);
-      }
       
     } catch (error) {
       console.error('Error processing message:', error);
@@ -916,68 +820,6 @@ export default function ConversationPractice() {
     }
   };
   
-  // Validate and clean user input
-  const validateUserInput = (text: string): string => {
-    // Remove excessive whitespace
-    let cleaned = text.trim().replace(/\s+/g, ' ');
-    
-    // Limit length for autism-friendly responses
-    if (cleaned.length > 200) {
-      cleaned = cleaned.substring(0, 200);
-    }
-    
-    return cleaned;
-  };
-  
-  // Analyze if response is contextually correct
-  const analyzeResponseCorrectness = (text: string, previousMessages: Message[]) => {
-    const lastBirdMessage = [...previousMessages].reverse().find(m => m.sender === 'bird');
-    
-    if (!lastBirdMessage) {
-      return { isCorrect: true, confidence: 1 };
-    }
-    
-    const analysis: any = {
-      isCorrect: true,
-      confidence: 0.8,
-      feedback: ''
-    };
-    
-    // Check if response is relevant to the question
-    const questionWords = ['what', 'how', 'why', 'when', 'where', 'who', 'which'];
-    const isQuestion = questionWords.some(word => 
-      lastBirdMessage.text.toLowerCase().includes(word + ' ')
-    );
-    
-    if (isQuestion) {
-      // Check if user provided some kind of answer
-      if (text.length < 2) {
-        analysis.isCorrect = false;
-        analysis.feedback = 'Try to give a longer answer';
-        analysis.confidence = 0.3;
-      } else if (text.toLowerCase() === "i don't know") {
-        analysis.isCorrect = true; // It's okay not to know
-        analysis.feedback = "It's okay not to know! Let's try something else.";
-        analysis.confidence = 0.7;
-      }
-    }
-    
-    // Check for greeting responses
-    if (lastBirdMessage.text.toLowerCase().includes('hello') || 
-        lastBirdMessage.text.toLowerCase().includes('hi ')) {
-      if (text.toLowerCase().includes('hello') || 
-          text.toLowerCase().includes('hi') ||
-          text.toLowerCase().includes('hey')) {
-        analysis.isCorrect = true;
-        analysis.confidence = 1;
-        analysis.feedback = 'Great greeting!';
-      }
-    }
-    
-    return analysis;
-  };
-  
-  // Show pronunciation feedback toast
   const showPronunciationFeedback = (score: number) => {
     let title = '';
     let description = '';
@@ -1004,17 +846,6 @@ export default function ConversationPractice() {
     }
   };
   
-  // Show response correctness feedback
-  const showResponseFeedback = (analysis: any) => {
-    if (analysis.feedback) {
-      toast({
-        title: analysis.isCorrect ? '✅ Good Response!' : '💡 Tip',
-        description: analysis.feedback,
-      });
-    }
-  };
-  
-  // Get encouraging fallback response
   const getEncouragingFallbackResponse = (userText: string): string => {
     const responses = [
       "That's wonderful! Tell me more!",
@@ -1024,7 +855,6 @@ export default function ConversationPractice() {
       "Great job! You're expressing yourself so well!"
     ];
     
-    // Check for specific patterns
     if (userText.toLowerCase().includes('hello') || userText.toLowerCase().includes('hi')) {
       return "Hello! It's so nice to talk with you! How are you today?";
     }
@@ -1036,39 +866,34 @@ export default function ConversationPractice() {
     return responses[Math.floor(Math.random() * responses.length)];
   };
   
-  // Use browser TTS as fallback
   const useBrowserTTS = (text: string) => {
     if ('speechSynthesis' in window) {
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9; // Slightly slower for clarity
-      utterance.pitch = 1.1; // Slightly higher pitch for friendliness
+      utterance.rate = 0.9;
+      utterance.pitch = 1.1;
       utterance.onstart = () => setIsBirdSpeaking(true);
       utterance.onend = () => setIsBirdSpeaking(false);
       speechSynthesis.speak(utterance);
     }
   };
 
-  // Handle text input submission
   const handleTextSubmit = () => {
     if (textInput.trim()) {
       processUserMessage(textInput.trim());
     }
   };
 
-  // Handle conversation completion
   const handleConversationComplete = (score: number, feedback: string) => {
     toast({
       title: "Great job! 🎉",
       description: `You scored ${score}%! ${feedback}`,
     });
     
-    // Navigate back to learning path after delay
     setTimeout(() => {
       navigate('/path');
     }, 3000);
   };
 
-  // Replay bird audio
   const replayAudio = (audioUrl: string) => {
     playAudioWithAnimation(
       audioUrl,
@@ -1082,6 +907,18 @@ export default function ConversationPractice() {
         variant: "destructive",
       });
     });
+  };
+
+  const getEmotionMessage = (emotion: EmotionAnalysis) => {
+    const messages = {
+      happy: "You look happy! 😊",
+      sad: "You seem a bit sad. I'm here for you! 💙",
+      angry: "Feeling frustrated? That's okay! 🤗",
+      surprised: "Something surprising? Let's figure it out! ✨",
+      fear: "It's okay to feel unsure. Take your time! 🌟",
+      neutral: "You're doing great! 👍",
+    };
+    return messages[emotion.currentEmotion] || messages.neutral;
   };
 
   if (isLoading && messages.length === 0) {
@@ -1156,7 +993,7 @@ export default function ConversationPractice() {
       </div>
 
       {/* Emotion Awareness Display */}
-      {currentEmotion && (
+      {currentEmotion && emotionDetectorEnabled && (
         <div className="fixed top-20 right-4 bg-white/90 backdrop-blur rounded-2xl p-4 shadow-lg z-30">
           <div className="flex items-center gap-3">
             <div className="text-3xl">
@@ -1335,7 +1172,7 @@ export default function ConversationPractice() {
             </p>
             
             {/* Emotion Support Feedback */}
-            {lastEmotionFeedback && (
+            {lastEmotionFeedback && emotionDetectorEnabled && (
               <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <p className="text-sm text-blue-700 text-center">
                   💙 {lastEmotionFeedback}
@@ -1346,13 +1183,13 @@ export default function ConversationPractice() {
         </div>
       </div>
       
-      {/* Webcam Emotion Detector (positioned fixed) */}
+      {/* Webcam Emotion Detector */}
       {showEmotionDetector && parentalConsent?.features.facialDetection && (
-        <div className="fixed bottom-4 left-4 z-50">
+        <div className="fixed bottom-24 left-4 z-50">
           <WebcamEmotionDetector
             onEmotionDetected={handleEmotionDetected}
             config={{
-              enabled: false, // Start disabled, user can turn on
+              enabled: emotionDetectorEnabled,
               showPreview: true,
               detectionInterval: 2000,
               privacyMode: true,
@@ -1361,6 +1198,18 @@ export default function ConversationPractice() {
             minimizable={true}
             className="max-w-sm"
           />
+          <Button
+            size="sm"
+            variant={emotionDetectorEnabled ? "default" : "outline"}
+            onClick={() => {
+              setEmotionDetectorEnabled(!emotionDetectorEnabled);
+              console.log('🎭 Emotion detector toggled:', !emotionDetectorEnabled);
+            }}
+            className="mt-2 w-full"
+          >
+            <Camera className="w-4 h-4 mr-2" />
+            {emotionDetectorEnabled ? "Disable Camera" : "Enable Camera"}
+          </Button>
         </div>
       )}
       
@@ -1374,7 +1223,7 @@ export default function ConversationPractice() {
       
       {/* Privacy Badge */}
       {parentalConsent?.features.facialDetection && (
-        <div className="fixed top-20 right-4 z-40">
+        <div className="fixed top-20 left-4 z-40">
           <Button
             variant="ghost"
             size="sm"

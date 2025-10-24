@@ -28,14 +28,14 @@ export class FaceDetectionService {
    */
   async loadModels(): Promise<void> {
     if (this.modelsLoaded) {
-      console.log('Face detection models already loaded');
+      console.log('✅ Face detection models already loaded');
       return;
     }
     
     try {
-      console.log('Loading face detection models...');
-      // Load models from CDN
-      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model';
+      console.log('📦 Loading face detection models...');
+      // ✅ Fixed: correct folder name is "models", not "model"
+      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/models';
       
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
@@ -58,9 +58,8 @@ export class FaceDetectionService {
    */
   async requestCameraAccess(): Promise<MediaStream> {
     try {
-      console.log('Requesting camera access...');
+      console.log('🎥 Requesting camera access...');
       
-      // Check if getUserMedia is available
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('getUserMedia is not supported in this browser');
       }
@@ -91,52 +90,61 @@ export class FaceDetectionService {
     if (this.detectionStream) {
       this.detectionStream.getTracks().forEach(track => track.stop());
       this.detectionStream = null;
+      console.log('🛑 Camera stream stopped');
     }
   }
-  
+
   /**
-   * Detect face and emotions from video element
+   * Detect face and emotions from video element (improved + reliable)
    */
   async detectEmotions(videoElement: HTMLVideoElement): Promise<EmotionAnalysis | null> {
     if (!this.modelsLoaded) {
       await this.loadModels();
     }
-    
+
+    // 🟢 Ensure video frame is ready before processing
+    if (!videoElement || videoElement.readyState < 2) {
+      console.warn('⏳ Video not ready yet for detection');
+      return null;
+    }
+
     try {
-      // Detect face with expressions
+      // ⚡ Run detection on current video frame
       const detection = await faceapi
         .detectSingleFace(videoElement, new faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceExpressions();
-      
+
+      // 🚫 No face detected
       if (!detection) {
+        console.log('😶 No face detected in current frame');
         return null;
       }
-      
-      // Extract emotion data
+
+      // ✅ Extract emotions
       const emotions = detection.expressions as EmotionData;
-      
-      // Find dominant emotion
+
+      // 🔍 Dominant emotion
       const dominantEmotion = this.getDominantEmotion(emotions);
-      
-      // Calculate eye contact (simplified - based on face detection confidence)
+
+      // 👁️ Estimate attention
       const isLookingAtScreen = detection.detection.score > 0.7;
-      
-      // Calculate engagement level
+
+      // 📊 Engagement level
       const engagementLevel = this.calculateEngagementLevel(
         emotions,
         isLookingAtScreen,
         detection.detection.score
       );
-      
-      // Detect struggling indicators
+
+      // ⚠️ Detect struggling indicators
       const strugglingIndicators = this.detectStrugglingIndicators(
         emotions,
         isLookingAtScreen,
         engagementLevel
       );
-      
-      // Extract facial landmarks (simplified)
+
+      // 🧠 Simplified landmarks
       const landmarks = detection.landmarks;
       const facialLandmarks: FacialLandmarks = {
         leftEye: { 
@@ -157,7 +165,9 @@ export class FaceDetectionService {
         },
         jawOutline: landmarks.getJawOutline().map(p => ({ x: p.x, y: p.y }))
       };
-      
+
+      console.log(`😃 Detected emotion: ${dominantEmotion.emotion} (${(dominantEmotion.confidence * 100).toFixed(1)}%)`);
+
       return {
         currentEmotion: dominantEmotion.emotion,
         confidence: dominantEmotion.confidence,
@@ -170,11 +180,11 @@ export class FaceDetectionService {
         facialLandmarks
       };
     } catch (error) {
-      console.error('Emotion detection error:', error);
+      console.error('❌ Emotion detection error:', error);
       return null;
     }
   }
-  
+
   /**
    * Get dominant emotion from emotion data
    */
@@ -184,10 +194,9 @@ export class FaceDetectionService {
       (max, [emotion, value]) => value > max[1] ? [emotion, value] : max,
       ['neutral', 0]
     );
-    
     return { emotion: dominantEmotion, confidence };
   }
-  
+
   /**
    * Calculate engagement level based on emotions and attention
    */
@@ -199,20 +208,20 @@ export class FaceDetectionService {
     if (!isLookingAtScreen || detectionConfidence < 0.5) {
       return 'low';
     }
-    
+
     const positiveEmotions = emotions.happy + emotions.surprised;
     const negativeEmotions = emotions.sad + emotions.angry + emotions.fearful;
     const neutralEmotion = emotions.neutral;
-    
+
     if (positiveEmotions > 0.6) {
       return 'high';
     } else if (neutralEmotion > 0.7 || negativeEmotions > 0.5) {
       return 'low';
     }
-    
+
     return 'medium';
   }
-  
+
   /**
    * Detect indicators that child might be struggling
    */
@@ -222,45 +231,35 @@ export class FaceDetectionService {
     engagementLevel: string
   ): string[] {
     const indicators: string[] = [];
-    
-    // Check for frustration
+
     if (emotions.angry > 0.3 || emotions.disgusted > 0.3) {
       indicators.push('frustration');
     }
-    
-    // Check for confusion
     if (emotions.surprised > 0.4 && emotions.fearful > 0.2) {
       indicators.push('confusion');
     }
-    
-    // Check for sadness/overwhelm
     if (emotions.sad > 0.3) {
       indicators.push('overwhelm');
     }
-    
-    // Check for disengagement
     if (!isLookingAtScreen) {
       indicators.push('looking_away');
     }
-    
     if (engagementLevel === 'low') {
       indicators.push('low_engagement');
     }
-    
-    // Check for processing (high neutral with focus)
     if (emotions.neutral > 0.8 && isLookingAtScreen) {
       indicators.push('processing');
     }
-    
+
     return indicators;
   }
-  
+
   /**
    * Analyze emotion history to detect patterns
    */
   static analyzeEmotionHistory(history: EmotionAnalysis[]): StrugglingSignals {
-    const recentEmotions = history.slice(-5); // Last 5 readings
-    
+    const recentEmotions = history.slice(-5);
+
     if (recentEmotions.length < 3) {
       return {
         frustration: false,
@@ -271,7 +270,7 @@ export class FaceDetectionService {
         prolongedNeutral: false
       };
     }
-    
+
     return {
       frustration: recentEmotions.filter(e => 
         e.currentEmotion === 'angry' || e.currentEmotion === 'disgusted'
@@ -294,7 +293,7 @@ export class FaceDetectionService {
       ).length >= 4
     };
   }
-  
+
   /**
    * Generate supportive feedback based on emotion analysis
    */
@@ -302,36 +301,25 @@ export class FaceDetectionService {
     analysis: EmotionAnalysis,
     strugglingSignals: StrugglingSignals
   ): string | null {
-    // If processing (concentrated look)
     if (analysis.strugglingIndicators.includes('processing')) {
       return "I can see you're thinking hard! Take your time.";
     }
-    
-    // If frustrated
     if (strugglingSignals.frustration || analysis.strugglingIndicators.includes('frustration')) {
       return "I can see this is tricky! Let's try it together.";
     }
-    
-    // If confused
     if (strugglingSignals.confusion || analysis.strugglingIndicators.includes('confusion')) {
       return "You look a bit unsure - would you like me to explain differently?";
     }
-    
-    // If looking away frequently
     if (strugglingSignals.frequentLookingAway) {
       return "I notice you're looking away - do you need a break?";
     }
-    
-    // If low engagement
     if (strugglingSignals.lowEngagement) {
       return "Let's make this more fun! What interests you most?";
     }
-    
-    // If highly engaged
     if (analysis.engagementLevel === 'high') {
       return "You're doing amazing! I love your enthusiasm!";
     }
-    
+
     return null;
   }
 }
