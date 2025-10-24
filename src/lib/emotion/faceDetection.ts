@@ -33,23 +33,36 @@ export class FaceDetectionService {
     }
     
     try {
-      console.log('📦 Loading face detection models...');
-      // ✅ Fixed: correct folder name is "models", not "model"
+      console.log('📦 Loading face detection models from CDN...');
       const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/models';
       
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-        faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
-      ]);
+      console.log('⏳ Loading tinyFaceDetector...');
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+      console.log('✅ tinyFaceDetector loaded');
+      
+      console.log('⏳ Loading faceLandmark68Net...');
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+      console.log('✅ faceLandmark68Net loaded');
+      
+      console.log('⏳ Loading faceRecognitionNet...');
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+      console.log('✅ faceRecognitionNet loaded');
+      
+      console.log('⏳ Loading faceExpressionNet...');
+      await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+      console.log('✅ faceExpressionNet loaded');
       
       this.modelsLoaded = true;
-      console.log('✅ Face detection models loaded successfully');
+      console.log('✅ All face detection models loaded successfully!');
     } catch (error) {
       console.error('❌ Failed to load face detection models:', error);
+      console.error('Error details:', {
+        name: (error as Error).name,
+        message: (error as Error).message,
+        stack: (error as Error).stack
+      });
       this.modelsLoaded = false;
-      throw new Error(`Failed to load face detection models: ${error}`);
+      throw new Error(`Failed to load face detection models. Please check your internet connection and try again. Error: ${(error as Error).message}`);
     }
   }
   
@@ -60,10 +73,16 @@ export class FaceDetectionService {
     try {
       console.log('🎥 Requesting camera access...');
       
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('getUserMedia is not supported in this browser');
+      // Check browser compatibility
+      if (!navigator.mediaDevices) {
+        throw new Error('navigator.mediaDevices is not available. Are you using HTTPS?');
       }
       
+      if (!navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia is not supported in this browser. Please update your browser.');
+      }
+      
+      console.log('⏳ Prompting user for camera permission...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 640 },
@@ -72,13 +91,37 @@ export class FaceDetectionService {
         }
       });
       
+      const videoTracks = stream.getVideoTracks();
       console.log('✅ Camera access granted');
+      console.log(`📹 Video tracks: ${videoTracks.length}`);
+      if (videoTracks.length > 0) {
+        console.log(`📹 Camera: ${videoTracks[0].label}`);
+        console.log(`📹 Settings:`, videoTracks[0].getSettings());
+      }
+      
       this.detectionStream = stream;
       return stream;
     } catch (error: any) {
       console.error('❌ Camera access error:', error);
-      console.error('Error name:', error.name);
-      console.error('Error message:', error.message);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        constraint: error.constraint
+      });
+      
+      // Provide helpful error messages
+      if (error.name === 'NotAllowedError') {
+        console.error('🚫 Camera permission was denied by user or browser policy');
+      } else if (error.name === 'NotFoundError') {
+        console.error('🚫 No camera device found');
+      } else if (error.name === 'NotReadableError') {
+        console.error('🚫 Camera is already in use by another application');
+      } else if (error.name === 'OverconstrainedError') {
+        console.error('🚫 Camera constraints cannot be satisfied');
+      } else if (error.name === 'SecurityError') {
+        console.error('🚫 Security error - ensure you are using HTTPS');
+      }
+      
       throw error;
     }
   }

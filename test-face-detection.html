@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Detection Test</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+            height: auto;
+            border: 2px solid #333;
+            border-radius: 8px;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px 5px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #333;
+            background: #4CAF50;
+            color: white;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .error {
+            color: red;
+            padding: 10px;
+            background: #ffe0e0;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            color: green;
+            padding: 10px;
+            background: #e0ffe0;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status {
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+        #video-container {
+            position: relative;
+            display: inline-block;
+        }
+        .emotion-overlay {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Face Detection & Emotion Recognition Test</h1>
+    <p>This page tests both camera access and face-api.js emotion detection.</p>
+    
+    <div class="status">
+        <h3>Status:</h3>
+        <div id="status-message">Waiting to start...</div>
+    </div>
+    
+    <div>
+        <button id="start-btn">Start Camera & Face Detection</button>
+        <button id="stop-btn" disabled>Stop</button>
+    </div>
+    
+    <div id="video-container" style="display: none;">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
+        <div id="emotion-overlay" class="emotion-overlay"></div>
+    </div>
+    
+    <div class="status">
+        <h3>Debug Log:</h3>
+        <pre id="debug-log"></pre>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const startBtn = document.getElementById('start-btn');
+        const stopBtn = document.getElementById('stop-btn');
+        const statusMessage = document.getElementById('status-message');
+        const debugLog = document.getElementById('debug-log');
+        const videoContainer = document.getElementById('video-container');
+        const emotionOverlay = document.getElementById('emotion-overlay');
+        
+        let stream = null;
+        let detectionInterval = null;
+        const logs = [];
+        
+        function log(msg, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${msg}`;
+            logs.push(logEntry);
+            debugLog.textContent = logs.join('\n');
+            console.log(logEntry);
+            debugLog.scrollTop = debugLog.scrollHeight;
+        }
+        
+        function showStatus(msg, type = 'info') {
+            statusMessage.className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'status';
+            statusMessage.textContent = msg;
+        }
+        
+        async function loadModels() {
+            try {
+                log('Loading face-api.js models from CDN...');
+                showStatus('Loading AI models...', 'info');
+                
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/models';
+                
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+                ]);
+                
+                log('✅ All models loaded successfully');
+                return true;
+            } catch (error) {
+                log(`❌ Model loading error: ${error.message}`, 'error');
+                showStatus(`Failed to load AI models: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        async function startCamera() {
+            try {
+                log('Requesting camera access...');
+                showStatus('Requesting camera access...', 'info');
+                
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('getUserMedia is not supported in this browser');
+                }
+                
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    },
+                    audio: false
+                });
+                
+                log('✅ Camera access granted');
+                video.srcObject = stream;
+                videoContainer.style.display = 'block';
+                
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        log('Video metadata loaded');
+                        video.play().then(() => {
+                            log('✅ Video playback started');
+                            resolve();
+                        });
+                    };
+                });
+                
+                // Set canvas dimensions to match video
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                return true;
+            } catch (error) {
+                log(`❌ Camera error: ${error.name} - ${error.message}`, 'error');
+                
+                let errorMessage = 'Failed to access camera';
+                if (error.name === 'NotAllowedError') {
+                    errorMessage = 'Camera permission denied. Please allow camera access.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage = 'No camera found.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage = 'Camera is already in use.';
+                }
+                
+                showStatus(errorMessage, 'error');
+                return false;
+            }
+        }
+        
+        async function detectFaces() {
+            try {
+                if (!video || video.readyState < 2) {
+                    log('Video not ready for detection', 'warn');
+                    return;
+                }
+                
+                const detection = await faceapi
+                    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceExpressions();
+                
+                if (detection) {
+                    const expressions = detection.expressions;
+                    const sortedExpressions = Object.entries(expressions)
+                        .sort(([, a], [, b]) => b - a);
+                    
+                    const dominantEmotion = sortedExpressions[0];
+                    const emotionText = `${dominantEmotion[0]}: ${(dominantEmotion[1] * 100).toFixed(1)}%`;
+                    
+                    log(`😃 Detected: ${emotionText}`);
+                    
+                    // Display emotions
+                    let emotionHTML = `<strong>${dominantEmotion[0].toUpperCase()}</strong><br>`;
+                    sortedExpressions.slice(0, 3).forEach(([emotion, confidence]) => {
+                        emotionHTML += `${emotion}: ${(confidence * 100).toFixed(1)}%<br>`;
+                    });
+                    emotionOverlay.innerHTML = emotionHTML;
+                    
+                    // Draw detection box
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    const box = detection.detection.box;
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(box.x, box.y, box.width, box.height);
+                    
+                    showStatus(`Face detected! Emotion: ${emotionText}`, 'success');
+                } else {
+                    log('No face detected in current frame', 'warn');
+                    showStatus('No face detected - please face the camera', 'info');
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    emotionOverlay.innerHTML = 'No face detected';
+                }
+            } catch (error) {
+                log(`❌ Detection error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function start() {
+            try {
+                startBtn.disabled = true;
+                log('=== Starting Face Detection Test ===');
+                
+                // Load models
+                const modelsLoaded = await loadModels();
+                if (!modelsLoaded) {
+                    startBtn.disabled = false;
+                    return;
+                }
+                
+                // Start camera
+                const cameraStarted = await startCamera();
+                if (!cameraStarted) {
+                    startBtn.disabled = false;
+                    return;
+                }
+                
+                log('✅ Starting face detection loop...');
+                showStatus('Running face detection...', 'success');
+                
+                // Start detection loop (every 500ms)
+                detectionInterval = setInterval(detectFaces, 500);
+                
+                stopBtn.disabled = false;
+            } catch (error) {
+                log(`❌ Startup error: ${error.message}`, 'error');
+                showStatus(`Startup error: ${error.message}`, 'error');
+                startBtn.disabled = false;
+            }
+        }
+        
+        function stop() {
+            log('=== Stopping Face Detection Test ===');
+            
+            if (detectionInterval) {
+                clearInterval(detectionInterval);
+                detectionInterval = null;
+                log('Detection loop stopped');
+            }
+            
+            if (stream) {
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    log(`Stopped track: ${track.kind}`);
+                });
+                stream = null;
+            }
+            
+            video.srcObject = null;
+            videoContainer.style.display = 'none';
+            
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            showStatus('Stopped', 'info');
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            log('✅ Cleanup complete');
+        }
+        
+        startBtn.addEventListener('click', start);
+        stopBtn.addEventListener('click', stop);
+        
+        log('Page loaded. Click "Start Camera & Face Detection" to begin.');
+        log(`face-api.js available: ${typeof faceapi !== 'undefined'}`);
+        log(`getUserMedia available: ${!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia)}`);
+        log(`Secure context: ${window.isSecureContext}`);
+    </script>
+</body>
+</html>

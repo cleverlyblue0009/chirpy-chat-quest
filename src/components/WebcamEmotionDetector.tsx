@@ -51,9 +51,13 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
   const [showVideo, setShowVideo] = useState(true);
   const [webcamConfig, setWebcamConfig] = useState<WebcamConfig>({ ...DEFAULT_CONFIG, ...config });
 
-  // Initialize face detection service
+  // Initialize face detection service and pre-load models
   useEffect(() => {
     faceServiceRef.current = FaceDetectionService.getInstance();
+    // Pre-load models in background to avoid delay when camera starts
+    faceServiceRef.current.loadModels().catch(err => {
+      console.error('Failed to pre-load face detection models:', err);
+    });
   }, []);
 
   // Handle permission changes
@@ -61,12 +65,27 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
     onPermissionChange?.(cameraState);
   }, [cameraState, onPermissionChange]);
 
+  // Auto-start camera when config.enabled changes to true
+  useEffect(() => {
+    if (config.enabled && !webcamConfig.enabled && cameraState.status === 'prompt') {
+      console.log('🎬 Auto-starting camera from config.enabled');
+      startCamera();
+    }
+  }, [config.enabled, webcamConfig.enabled, cameraState.status, startCamera]);
+
   // Start detection loop
   const startDetectionLoop = useCallback(() => {
     if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
 
     const detectEmotions = async () => {
       if (!faceServiceRef.current || !videoRef.current || !webcamConfig.enabled) return;
+      
+      // Ensure video has valid frame data (readyState 4 = HAVE_ENOUGH_DATA)
+      if (videoRef.current.readyState < 2) {
+        console.log('⏳ Video not ready for detection yet (readyState:', videoRef.current.readyState, ')');
+        return;
+      }
+      
       const analysis = await faceServiceRef.current.detectEmotions(videoRef.current);
       if (analysis) {
         setCurrentEmotion(analysis);
@@ -74,8 +93,11 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
       }
     };
 
-    detectEmotions();
-    detectionIntervalRef.current = setInterval(detectEmotions, webcamConfig.detectionInterval);
+    // Wait a bit before starting to ensure video has first frame
+    setTimeout(() => {
+      detectEmotions();
+      detectionIntervalRef.current = setInterval(detectEmotions, webcamConfig.detectionInterval);
+    }, 500);
   }, [webcamConfig.enabled, webcamConfig.detectionInterval, onEmotionDetected]);
 
   // ✅ Combined, corrected startCamera
@@ -92,7 +114,9 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
     try {
       setCameraState({ status: 'checking' });
 
+      console.log('📦 Loading face detection models...');
       await faceServiceRef.current.loadModels();
+      console.log('✅ Models loaded, requesting camera access...');
       const stream = await faceServiceRef.current.requestCameraAccess();
 
       if (videoRef.current) {
@@ -128,7 +152,23 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
         });
 
         await videoRef.current.play();
-        console.log('✅ Video is now playing');
+        console.log('✅ Video is now playing, readyState:', videoRef.current.readyState);
+        
+        // Wait for at least one frame to be available
+        if (videoRef.current.readyState < 2) {
+          console.log('⏳ Waiting for video frame data...');
+          await new Promise<void>((resolve) => {
+            const checkReady = () => {
+              if (videoRef.current && videoRef.current.readyState >= 2) {
+                console.log('✅ Video frame data ready');
+                resolve();
+              } else {
+                setTimeout(checkReady, 100);
+              }
+            };
+            checkReady();
+          });
+        }
       }
 
       setCameraState({ status: 'granted' });
