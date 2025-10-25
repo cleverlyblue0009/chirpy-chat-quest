@@ -69,8 +69,8 @@ export default function ConversationPractice() {
   const [emotionHistory, setEmotionHistory] = useState<EmotionAnalysis[]>([]);
   const [showEmotionDetector, setShowEmotionDetector] = useState(false);
   const [strugglingSignals, setStrugglingSignals] = useState<StrugglingSignals | null>(null);
-  const [lastEmotionFeedback, setLastEmotionFeedback] = useState<string | null>(null);
   const [emotionDetectorEnabled, setEmotionDetectorEnabled] = useState(false);
+  const [lastEmotionResponseTime, setLastEmotionResponseTime] = useState<number>(0);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -134,38 +134,85 @@ export default function ConversationPractice() {
       
       console.log('📊 Struggling signals:', signals);
       
-      // Generate supportive feedback if needed
-      const feedback = FaceDetectionService.generateEmotionFeedback(analysis, signals);
-      if (feedback && feedback !== lastEmotionFeedback) {
-        setLastEmotionFeedback(feedback);
-        console.log('💬 Emotion feedback generated:', feedback);
-      }
-      
       return updated;
     });
-  }, [lastEmotionFeedback]);
+  }, []);
   
-  // Check for emotional support needs based on emotion state
-  const checkForEmotionalSupport = useCallback(() => {
-    if (!currentEmotion || !emotionDetectorEnabled) return;
+  // Generate proactive emotional support message from chatbot
+  const generateEmotionalSupportMessage = useCallback(async () => {
+    if (!currentEmotion || !emotionDetectorEnabled || !birdCharacter || !conversationId) return;
+    if (isBirdSpeaking || isLoading) return;
     
-    const negativeEmotions = ['sad', 'angry', 'fearful', 'disgusted'];
-    const isNegativeEmotion = negativeEmotions.includes(currentEmotion.currentEmotion);
+    const now = Date.now();
+    // Only respond to emotion changes every 15 seconds to avoid spamming
+    if (now - lastEmotionResponseTime < 15000) return;
     
-    // Only show support toast if: negative emotion + looking away + not already showing support
-    if (isNegativeEmotion && !currentEmotion.isLookingAtScreen && lastEmotionFeedback === null) {
-      setLastEmotionFeedback(
-        `I notice you might be feeling ${currentEmotion.currentEmotion}. That's okay! Would you like to take a break? 💙`
-      );
+    const signals = strugglingSignals;
+    if (!signals) return;
+    
+    let shouldRespond = false;
+    let emotionalMessage = '';
+    
+    // Check if chatbot should proactively respond to emotional state
+    if (signals.frustration && currentEmotion.confidence > 0.6) {
+      shouldRespond = true;
+      emotionalMessage = "I can see this is a bit tricky! That's totally okay. Let's take it one step at a time together. You're doing great!";
+    } else if (signals.confusion && currentEmotion.confidence > 0.6) {
+      shouldRespond = true;
+      emotionalMessage = "Hmm, you look a bit puzzled! Would you like me to explain that in a different way? I'm here to help!";
+    } else if (signals.frequentLookingAway && conversationExchanges > 2) {
+      shouldRespond = true;
+      emotionalMessage = "I notice you're looking away. Do you need a little break? Or would you like to talk about something else? Whatever feels good!";
+    } else if (signals.lowEngagement && conversationExchanges > 3) {
+      shouldRespond = true;
+      emotionalMessage = "Let's make this more fun! What do you want to talk about? I'm really interested in hearing your ideas!";
+    } else if (currentEmotion.currentEmotion === 'happy' && currentEmotion.confidence > 0.7 && currentEmotion.engagementLevel === 'high') {
+      shouldRespond = true;
+      emotionalMessage = "I can see you're so happy! Your smile makes me happy too! Tell me more - I love your enthusiasm!";
     }
     
-    // Low engagement check
-    if (currentEmotion.engagementLevel === 'low' && conversationExchanges > 3 && conversationExchanges % 3 === 0) {
-      if (lastEmotionFeedback === null) {
-        setLastEmotionFeedback("You're doing great! Take your time. 🌟");
+    if (shouldRespond && emotionalMessage) {
+      setLastEmotionResponseTime(now);
+      
+      try {
+        // Generate speech for the emotional support message
+        const audioUrl = await generateSpeech(
+          emotionalMessage,
+          birdCharacter.id || 'ruby_robin',
+          conversationId
+        ).catch(() => undefined);
+        
+        const emotionMessage = {
+          sender: 'bird' as const,
+          text: emotionalMessage,
+          timestamp: Timestamp.now(),
+          audio_url: audioUrl,
+        };
+        
+        // Add message to conversation
+        const conversationRef = doc(db, 'conversations', conversationId);
+        const conversationDoc = await getDoc(conversationRef);
+        const currentMessages = conversationDoc.data()?.messages || [];
+        
+        await updateDoc(conversationRef, {
+          messages: [...currentMessages, emotionMessage]
+        });
+        
+        // Play audio if available
+        if (audioUrl) {
+          playAudioWithAnimation(
+            audioUrl,
+            () => setIsBirdSpeaking(true),
+            () => setIsBirdSpeaking(false)
+          ).catch(console.error);
+        } else {
+          useBrowserTTS(emotionalMessage);
+        }
+      } catch (error) {
+        console.error('Error generating emotional support message:', error);
       }
     }
-  }, [currentEmotion, emotionDetectorEnabled, conversationExchanges, lastEmotionFeedback]);
+  }, [currentEmotion, emotionDetectorEnabled, birdCharacter, conversationId, isBirdSpeaking, isLoading, lastEmotionResponseTime, strugglingSignals, conversationExchanges]);
   
   // Handle parental consent
   const handleParentalConsent = async (consent: ParentalConsent) => {
@@ -393,9 +440,9 @@ export default function ConversationPractice() {
   
   // Check for emotional support needs periodically
   useEffect(() => {
-    const supportCheckInterval = setInterval(checkForEmotionalSupport, 8000);
+    const supportCheckInterval = setInterval(generateEmotionalSupportMessage, 10000);
     return () => clearInterval(supportCheckInterval);
-  }, [checkForEmotionalSupport]);
+  }, [generateEmotionalSupportMessage]);
 
   // Start recording audio
   const startRecording = async () => {
@@ -736,9 +783,16 @@ export default function ConversationPractice() {
       const currentExchanges = conversationExchanges + 1;
       setConversationExchanges(currentExchanges);
       
-      // Build emotion context for AI
+      // Build emotion context for AI - always include current emotion state
       const emotionContext = buildEmotionContext();
-      console.log('🤖 Sending to AI with emotion context:', emotionContext ? 'YES' : 'NO');
+      
+      // Enhance emotion context with recent feedback suggestions
+      if (emotionContext && strugglingSignals) {
+        emotionContext.strugglingSignals = strugglingSignals;
+        emotionContext.shouldBeEmphatic = currentEmotion?.needsSupport || false;
+      }
+      
+      console.log('🤖 Sending to AI with emotion context:', emotionContext ? 'YES' : 'NO', emotionContext);
       
       let aiResponse;
       try {
@@ -937,17 +991,6 @@ export default function ConversationPractice() {
     });
   };
 
-  const getEmotionMessage = (emotion: EmotionAnalysis) => {
-    const messages = {
-      happy: "You look happy! 😊",
-      sad: "You seem a bit sad. I'm here for you! 💙",
-      angry: "Feeling frustrated? That's okay! 🤗",
-      surprised: "Something surprising? Let's figure it out! ✨",
-      fear: "It's okay to feel unsure. Take your time! 🌟",
-      neutral: "You're doing great! 👍",
-    };
-    return messages[emotion.currentEmotion] || messages.neutral;
-  };
 
   if (isLoading && messages.length === 0) {
     return (
@@ -1020,28 +1063,6 @@ export default function ConversationPractice() {
         </div>
       </div>
 
-      {/* Emotion Awareness Display */}
-      {currentEmotion && emotionDetectorEnabled && (
-        <div className="fixed top-20 right-4 bg-white/90 backdrop-blur rounded-2xl p-4 shadow-lg z-30">
-          <div className="flex items-center gap-3">
-            <div className="text-3xl">
-              {currentEmotion.currentEmotion === 'happy' ? '😊' :
-               currentEmotion.currentEmotion === 'sad' ? '😢' :
-               currentEmotion.currentEmotion === 'angry' ? '😤' :
-               currentEmotion.currentEmotion === 'surprised' ? '😲' :
-               currentEmotion.currentEmotion === 'fear' ? '😰' : '😐'}
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-gray-800">
-                {birdCharacter?.name} notices:
-              </p>
-              <p className="text-xs text-gray-600">
-                {getEmotionMessage(currentEmotion)}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Conversation Area */}
       <div className="relative z-10 flex-1 overflow-y-auto pb-32">
@@ -1198,22 +1219,13 @@ export default function ConversationPractice() {
                useTextInput ? "Type your message and press Enter" :
                "Tap the microphone to speak"}
             </p>
-            
-            {/* Emotion Support Feedback */}
-            {lastEmotionFeedback && emotionDetectorEnabled && (
-              <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-sm text-blue-700 text-center">
-                  💙 {lastEmotionFeedback}
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>
       
-      {/* Webcam Emotion Detector */}
+      {/* Webcam Emotion Detector - Now draggable! */}
       {showEmotionDetector && parentalConsent?.features.facialDetection && (
-        <div className="fixed bottom-24 left-4 z-50">
+        <div className="fixed top-24 right-4 z-50">
           <WebcamEmotionDetector
             onEmotionDetected={handleEmotionDetected}
             config={{
