@@ -71,6 +71,7 @@ export default function ConversationPractice() {
   const [strugglingSignals, setStrugglingSignals] = useState<StrugglingSignals | null>(null);
   const [emotionDetectorEnabled, setEmotionDetectorEnabled] = useState(false);
   const [lastEmotionResponseTime, setLastEmotionResponseTime] = useState<number>(0);
+  const [cameraActive, setCameraActive] = useState(false);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -96,24 +97,29 @@ export default function ConversationPractice() {
   };
 
   // Generate proactive emotional support message from chatbot
-  const generateEmotionalSupportMessage = useCallback(async (forceImmediate: boolean = false) => {
-    if (!currentEmotion || !emotionDetectorEnabled || !birdCharacter || !conversationId) {
+  const generateEmotionalSupportMessage = useCallback(async (forceImmediate: boolean = false, isUrgent: boolean = false) => {
+    if (!currentEmotion || !cameraActive || !birdCharacter || !conversationId) {
       console.log('⚠️ Cannot generate emotional support:', {
         hasEmotion: !!currentEmotion,
-        emotionDetectorEnabled,
+        cameraActive,
         hasBirdCharacter: !!birdCharacter,
         hasConversationId: !!conversationId
       });
       return;
     }
-    if (isBirdSpeaking || isLoading) {
+    
+    // For urgent emotions (distress), allow interruption
+    if (!isUrgent && (isBirdSpeaking || isLoading)) {
       console.log('⚠️ Skipping emotional support: chatbot busy', { isBirdSpeaking, isLoading });
       return;
     }
     
     const now = Date.now();
-    // Only respond to emotion changes every 15 seconds to avoid spamming (unless forced)
-    if (!forceImmediate && now - lastEmotionResponseTime < 15000) return;
+    // For urgent distress signals, skip cooldown. Otherwise only respond every 15 seconds
+    if (!isUrgent && !forceImmediate && now - lastEmotionResponseTime < 15000) {
+      console.log('⏰ Cooldown active, skipping non-urgent response');
+      return;
+    }
     
     let shouldRespond = false;
     let emotionalMessage = '';
@@ -227,7 +233,7 @@ export default function ConversationPractice() {
     } else if (forceImmediate) {
       console.log('⚠️ Forced immediate response but no message to send');
     }
-  }, [currentEmotion, emotionDetectorEnabled, birdCharacter, conversationId, isBirdSpeaking, isLoading, lastEmotionResponseTime, strugglingSignals, conversationExchanges, currentUser]);
+  }, [currentEmotion, cameraActive, birdCharacter, conversationId, isBirdSpeaking, isLoading, lastEmotionResponseTime, strugglingSignals, conversationExchanges, currentUser]);
 
   // Check for existing parental consent on mount
   useEffect(() => {
@@ -284,22 +290,24 @@ export default function ConversationPractice() {
     
     // IMMEDIATE response for negative emotions or low engagement
     if (analysis.confidence > 0.5) {
-      const negativeEmotions = ['angry', 'sad', 'fearful', 'disgusted'];
-      if (negativeEmotions.includes(analysis.currentEmotion)) {
-        console.log('⚠️ Negative emotion detected! Triggering immediate response...');
-        // Trigger immediate emotional support with a small delay to ensure state is updated
-        setTimeout(() => generateEmotionalSupportMessage(true), 500);
+      const distressEmotions = ['angry', 'sad', 'fearful', 'disgusted'];
+      const isDistress = distressEmotions.includes(analysis.currentEmotion);
+      
+      if (isDistress) {
+        console.log('🚨 DISTRESS DETECTED! Triggering URGENT immediate response...');
+        // Mark as urgent to bypass all cooldowns and interruption blocks
+        setTimeout(() => generateEmotionalSupportMessage(true, true), 100);
       } else if (analysis.currentEmotion === 'happy' && analysis.confidence > 0.7) {
         // Also respond immediately to strong positive emotions
         console.log('😊 Strong positive emotion detected! Celebrating with user...');
-        setTimeout(() => generateEmotionalSupportMessage(true), 500);
+        setTimeout(() => generateEmotionalSupportMessage(true, false), 500);
       }
     }
     
-    // Also trigger for low engagement
+    // Also trigger for low engagement (non-urgent)
     if (analysis.engagementLevel === 'low' && analysis.confidence > 0.5) {
       console.log('📉 Low engagement detected! Triggering immediate response...');
-      setTimeout(() => generateEmotionalSupportMessage(true), 500);
+      setTimeout(() => generateEmotionalSupportMessage(true, false), 500);
     }
   }, [generateEmotionalSupportMessage]);
   
@@ -319,6 +327,8 @@ export default function ConversationPractice() {
       
       if (consent.features.facialDetection) {
         setShowEmotionDetector(true);
+        setEmotionDetectorEnabled(true);
+        console.log('✅ Emotion detector enabled via parental consent');
         toast({
           title: "Features Enabled",
           description: "Facial emotion detection has been enabled to better support learning.",
@@ -1306,6 +1316,16 @@ export default function ConversationPractice() {
         <div className="fixed top-24 right-4 z-50">
           <WebcamEmotionDetector
             onEmotionDetected={handleEmotionDetected}
+            onPermissionChange={(state) => {
+              const isActive = state.status === 'granted';
+              setCameraActive(isActive);
+              if (isActive) {
+                setEmotionDetectorEnabled(true);
+                console.log('📹 Camera activated - emotion detector enabled');
+              } else {
+                console.log('📹 Camera deactivated');
+              }
+            }}
             config={{
               enabled: emotionDetectorEnabled,
               showPreview: true,
@@ -1316,18 +1336,25 @@ export default function ConversationPractice() {
             minimizable={true}
             className="max-w-sm"
           />
-          <Button
-            size="sm"
-            variant={emotionDetectorEnabled ? "default" : "outline"}
-            onClick={() => {
-              setEmotionDetectorEnabled(!emotionDetectorEnabled);
-              console.log('🎭 Emotion detector toggled:', !emotionDetectorEnabled);
-            }}
-            className="mt-2 w-full"
-          >
-            <Camera className="w-4 h-4 mr-2" />
-            {emotionDetectorEnabled ? "Disable Camera" : "Enable Camera"}
-          </Button>
+          {cameraActive && currentEmotion && (
+            <div className="mt-2 p-2 bg-white rounded-lg shadow-md text-xs">
+              <div className="flex items-center gap-2">
+                <span>😊 {currentEmotion.currentEmotion}</span>
+                <span className={`px-2 py-1 rounded ${
+                  currentEmotion.engagementLevel === 'high' ? 'bg-green-100 text-green-800' :
+                  currentEmotion.engagementLevel === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {currentEmotion.engagementLevel}
+                </span>
+              </div>
+              {currentEmotion.needsSupport && (
+                <div className="mt-1 text-orange-600 font-semibold animate-pulse">
+                  🤗 Preparing support...
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
       
