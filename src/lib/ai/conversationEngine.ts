@@ -50,6 +50,35 @@ export async function generateAIResponse(
       birdCharacter: 'ruby_robin',
     };
     
+    // Build emotion-aware system prompt modifier
+    let systemPromptModifier = '';
+    
+    if (emotionContext) {
+      if (emotionContext.isStruggling) {
+        systemPromptModifier += `EMOTION_STATE: Child is struggling (emotion: ${emotionContext.currentEmotion}, looking at screen: ${emotionContext.isLookingAtScreen}). Response adjustments: 1) Simplify language, 2) Keep response under 40 words, 3) Offer binary choices when possible, 4) Be extra encouraging, 5) Consider suggesting a break if emotional. `;
+      }
+      
+      if (emotionContext.needsSimplification) {
+        systemPromptModifier += `LANGUAGE_COMPLEXITY: Child needs simplified language. Use: 1) Shorter sentences (max 10 words), 2) One idea per sentence, 3) Concrete examples, 4) Avoid metaphors unless explained. `;
+      }
+      
+      if (emotionContext.engagementLevel === 'high') {
+        systemPromptModifier += `ENGAGEMENT_LEVEL: Child is highly engaged! You can: 1) Ask more detailed questions, 2) Encourage elaboration with "Tell me more!", 3) Use playful tone, 4) Celebrate enthusiasm. `;
+      }
+      
+      if (emotionContext.lookAwayCount >= 2) {
+        systemPromptModifier += `ATTENTION_WARNING: Child looked away ${emotionContext.lookAwayCount} times. Adjustments: 1) Keep responses SHORT (max 25 words), 2) Use simple yes/no questions, 3) Check if they need a break. `;
+      }
+      
+      if (emotionContext.conversationPace === 'slow') {
+        systemPromptModifier += `PROCESSING_TIME: Conversation is slow-paced. Give more thinking time. Use: "Take your time...", "No rush...", "Think about it..." `;
+      }
+      
+      if (emotionContext.conversationPace === 'fast') {
+        systemPromptModifier += `PROCESSING_TIME: Conversation is fast-paced. Slow down slightly. Add pauses and give processing time between questions. `;
+      }
+    }
+    
     // Get level data for context
     const levelDoc = await getDoc(doc(db, 'levels', levelId));
     if (levelDoc.exists()) {
@@ -69,7 +98,8 @@ export async function generateAIResponse(
         levelId,
         userMessage,
         analysisData: analysis,
-        emotionContext
+        emotionContext,
+        systemPromptModifier: systemPromptModifier || undefined
       });
       
       // Ensure we have valid response data from API

@@ -145,6 +145,28 @@ export default function ConversationPractice() {
     });
   }, [lastEmotionFeedback]);
   
+  // Check for emotional support needs based on emotion state
+  const checkForEmotionalSupport = useCallback(() => {
+    if (!currentEmotion || !emotionDetectorEnabled) return;
+    
+    const negativeEmotions = ['sad', 'angry', 'fearful', 'disgusted'];
+    const isNegativeEmotion = negativeEmotions.includes(currentEmotion.currentEmotion);
+    
+    // Only show support toast if: negative emotion + looking away + not already showing support
+    if (isNegativeEmotion && !currentEmotion.isLookingAtScreen && lastEmotionFeedback === null) {
+      setLastEmotionFeedback(
+        `I notice you might be feeling ${currentEmotion.currentEmotion}. That's okay! Would you like to take a break? 💙`
+      );
+    }
+    
+    // Low engagement check
+    if (currentEmotion.engagementLevel === 'low' && conversationExchanges > 3 && conversationExchanges % 3 === 0) {
+      if (lastEmotionFeedback === null) {
+        setLastEmotionFeedback("You're doing great! Take your time. 🌟");
+      }
+    }
+  }, [currentEmotion, emotionDetectorEnabled, conversationExchanges, lastEmotionFeedback]);
+  
   // Handle parental consent
   const handleParentalConsent = async (consent: ParentalConsent) => {
     if (!currentUser) return;
@@ -368,6 +390,12 @@ export default function ConversationPractice() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+  
+  // Check for emotional support needs periodically
+  useEffect(() => {
+    const supportCheckInterval = setInterval(checkForEmotionalSupport, 8000);
+    return () => clearInterval(supportCheckInterval);
+  }, [checkForEmotionalSupport]);
 
   // Start recording audio
   const startRecording = async () => {
