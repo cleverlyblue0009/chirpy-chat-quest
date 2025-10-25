@@ -3,7 +3,7 @@ import { FaceDetectionService } from '@/lib/emotion/faceDetection';
 import { EmotionAnalysis, CameraPermissionState, WebcamConfig } from '@/types/emotion';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Camera, CameraOff, Eye, EyeOff, AlertCircle, Smile, Frown, Meh } from 'lucide-react';
+import { Camera, CameraOff, Eye, EyeOff, AlertCircle, Smile, Frown, Meh, Move } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
@@ -53,6 +53,9 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
     ...DEFAULT_CONFIG,
     ...config,
   });
+  const [isDragging, setIsDragging] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number } | null>(null);
 
   useEffect(() => {
     faceServiceRef.current = FaceDetectionService.getInstance();
@@ -245,8 +248,52 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
     }
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: position.x,
+      initialY: position.y,
+    };
+  };
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging || !dragRef.current) return;
+    
+    const deltaX = e.clientX - dragRef.current.startX;
+    const deltaY = e.clientY - dragRef.current.startY;
+    
+    setPosition({
+      x: dragRef.current.initialX + deltaX,
+      y: dragRef.current.initialY + deltaY,
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
   return (
-    <div className={cn('relative', className)}>
+    <div 
+      className={cn('relative', className, isDragging && 'cursor-grabbing')}
+      style={{
+        transform: `translate(${position.x}px, ${position.y}px)`,
+        transition: isDragging ? 'none' : 'transform 0.2s ease-out',
+      }}
+    >
       {showPrivacyNotice && !webcamConfig.enabled && (
         <Alert className="mb-4">
           <AlertCircle className="h-4 w-4" />
@@ -260,7 +307,11 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
 
       <Card className={cn('overflow-hidden transition-all duration-300', isMinimized && 'w-48')}>
         <div className="flex items-center justify-between p-2 bg-muted/50">
-          <div className="flex items-center gap-2">
+          <div 
+            className="flex items-center gap-2 cursor-grab active:cursor-grabbing flex-1"
+            onMouseDown={handleMouseDown}
+          >
+            <Move className="h-3 w-3 text-muted-foreground" />
             {webcamConfig.enabled ? (
               <>
                 <div className="relative">
@@ -331,19 +382,19 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
             />
 
             {webcamConfig.enabled && showVideo && currentEmotion && (
-              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                <div className="bg-black/70 text-white px-2 py-1 rounded-md flex items-center gap-2">
+              <div className="absolute bottom-4 left-2 right-2 flex items-center justify-between pointer-events-none">
+                <div className="bg-black/80 text-white px-2 py-1 rounded-md flex items-center gap-2 shadow-lg">
                   <span className="text-lg">
                     {EMOTION_EMOJIS[currentEmotion.currentEmotion] || '🤔'}
                   </span>
-                  <span className="text-xs">
-                    {currentEmotion.currentEmotion} ({Math.round(currentEmotion.confidence * 100)}%)
+                  <span className="text-xs font-medium">
+                    {currentEmotion.currentEmotion}
                   </span>
                 </div>
 
-                <div className="bg-black/70 text-white px-2 py-1 rounded-md flex items-center gap-1">
+                <div className="bg-black/80 text-white px-2 py-1 rounded-md flex items-center gap-1 shadow-lg">
                   {getEngagementIndicator()}
-                  <span className="text-xs">{currentEmotion.engagementLevel}</span>
+                  <span className="text-xs capitalize">{currentEmotion.engagementLevel}</span>
                 </div>
               </div>
             )}
@@ -365,16 +416,6 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
               </div>
             )}
 
-            {currentEmotion?.needsSupport && (
-              <Alert className="mt-2">
-                <AlertDescription className="text-xs">
-                  I'm here to help!{' '}
-                  {currentEmotion.strugglingIndicators.includes('frustration')
-                    ? "Let's take it step by step."
-                    : "Take your time, you're doing great!"}
-                </AlertDescription>
-              </Alert>
-            )}
           </div>
         )}
 

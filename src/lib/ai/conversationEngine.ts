@@ -50,33 +50,62 @@ export async function generateAIResponse(
       birdCharacter: 'ruby_robin',
     };
     
-    // Build emotion-aware system prompt modifier
+    // Build emotion-aware system prompt modifier - make it feel like a supportive friend
     let systemPromptModifier = '';
     
     if (emotionContext) {
+      // Add empathy and emotional awareness to responses
+      systemPromptModifier += `IMPORTANT: You are a friendly, supportive companion having a natural conversation. You can SEE the child's emotions through their facial expressions. `;
+      
+      // Current emotional state awareness
+      systemPromptModifier += `CURRENT_EMOTION: The child is feeling ${emotionContext.currentEmotion} (confidence: ${Math.round((emotionContext.emotionConfidence || 0) * 100)}%). `;
+      
+      if (emotionContext.currentEmotion === 'happy') {
+        systemPromptModifier += `The child is happy! Match their positive energy. Share in their joy. Use exclamation points and enthusiastic language! `;
+      } else if (emotionContext.currentEmotion === 'sad') {
+        systemPromptModifier += `The child seems sad. Be gentle, caring, and understanding. Offer comfort without being pushy. Ask if they'd like to talk about it or do something fun. `;
+      } else if (emotionContext.currentEmotion === 'angry' || emotionContext.currentEmotion === 'frustrated') {
+        systemPromptModifier += `The child seems frustrated or upset. Acknowledge their feelings with empathy: "I can see you're feeling frustrated" or "It's okay to feel upset". Help them work through it gently. `;
+      } else if (emotionContext.currentEmotion === 'surprised') {
+        systemPromptModifier += `The child looks surprised! They might be processing something new or unexpected. Give them time to absorb information. Ask gentle questions. `;
+      }
+      
       if (emotionContext.isStruggling) {
-        systemPromptModifier += `EMOTION_STATE: Child is struggling (emotion: ${emotionContext.currentEmotion}, looking at screen: ${emotionContext.isLookingAtScreen}). Response adjustments: 1) Simplify language, 2) Keep response under 40 words, 3) Offer binary choices when possible, 4) Be extra encouraging, 5) Consider suggesting a break if emotional. `;
+        systemPromptModifier += `STRUGGLING: The child is having difficulty. As a friend would: 1) Acknowledge the challenge warmly ("I can see this is tricky!"), 2) Break things down simply, 3) Offer to help or try differently, 4) Stay patient and encouraging. Keep responses under 35 words. `;
+      }
+      
+      if (emotionContext.shouldBeEmphatic) {
+        systemPromptModifier += `BE_EXTRA_SUPPORTIVE: The child needs emotional support right now. Show you care about them as a person, not just the learning. Use phrases like "I'm here for you", "You're doing amazing", "It's okay to take a break". `;
       }
       
       if (emotionContext.needsSimplification) {
-        systemPromptModifier += `LANGUAGE_COMPLEXITY: Child needs simplified language. Use: 1) Shorter sentences (max 10 words), 2) One idea per sentence, 3) Concrete examples, 4) Avoid metaphors unless explained. `;
+        systemPromptModifier += `SIMPLIFY: The child looks confused. Use very simple language - short sentences (max 8 words), one clear idea at a time, concrete examples. No complex words. `;
       }
       
       if (emotionContext.engagementLevel === 'high') {
-        systemPromptModifier += `ENGAGEMENT_LEVEL: Child is highly engaged! You can: 1) Ask more detailed questions, 2) Encourage elaboration with "Tell me more!", 3) Use playful tone, 4) Celebrate enthusiasm. `;
+        systemPromptModifier += `HIGH_ENGAGEMENT: The child is really into this! They're looking at the screen and seem interested. Go deeper! Ask follow-up questions. Be playful. Celebrate their enthusiasm: "I love how excited you are about this!" `;
+      } else if (emotionContext.engagementLevel === 'low') {
+        systemPromptModifier += `LOW_ENGAGEMENT: The child seems disengaged. Try to re-engage them naturally: Ask about THEIR interests, make it fun, use humor, or suggest switching topics. Be a friend noticing they're not having fun. `;
       }
       
       if (emotionContext.lookAwayCount >= 2) {
-        systemPromptModifier += `ATTENTION_WARNING: Child looked away ${emotionContext.lookAwayCount} times. Adjustments: 1) Keep responses SHORT (max 25 words), 2) Use simple yes/no questions, 3) Check if they need a break. `;
+        systemPromptModifier += `ATTENTION: Child looked away ${emotionContext.lookAwayCount} times. They might need a break or be distracted. Keep it SHORT (max 20 words). Ask simple yes/no questions. Maybe check in: "Do you want to keep going or take a quick break?" `;
+      }
+      
+      if (!emotionContext.isLookingAtScreen) {
+        systemPromptModifier += `NOT_LOOKING: Child is looking away right now. Keep response brief and engaging to draw attention back. Use their name if you know it. `;
       }
       
       if (emotionContext.conversationPace === 'slow') {
-        systemPromptModifier += `PROCESSING_TIME: Conversation is slow-paced. Give more thinking time. Use: "Take your time...", "No rush...", "Think about it..." `;
+        systemPromptModifier += `SLOW_PACE: Child is taking time to process. That's great! Be patient. Use encouraging phrases: "Take all the time you need", "No rush, I'm right here", "Think about it". Give space between ideas. `;
       }
       
       if (emotionContext.conversationPace === 'fast') {
-        systemPromptModifier += `PROCESSING_TIME: Conversation is fast-paced. Slow down slightly. Add pauses and give processing time between questions. `;
+        systemPromptModifier += `FAST_PACE: Conversation is moving quickly. Slow down a bit to ensure comprehension. Add brief pauses in your language: "So... what do you think?" Use "hmm" or "let's see" to create natural breathing room. `;
       }
+      
+      // Add general friendly communication style
+      systemPromptModifier += `STYLE: Talk like a caring friend, not a teacher. Use contractions ("you're" not "you are"). Be warm and genuine. Reflect their emotions: if they're excited, be excited WITH them. If they're struggling, be understanding WITH them. `;
     }
     
     // Get level data for context
@@ -153,11 +182,13 @@ function generateFallbackResponse(
   context: any
 ): AIResponse {
   const responses = [
-    "That's wonderful! Tell me more about that.",
-    "I really like hearing about that! What else?",
-    "You're doing so well! Can you share another thought?",
-    "That sounds interesting! How does that make you feel?",
-    "Great job expressing yourself! What do you think about that?"
+    "That's wonderful! Tell me more about that!",
+    "I really like hearing about that! What else can you tell me?",
+    "You're doing so well! I'm loving this conversation!",
+    "That sounds really interesting! How does that make you feel?",
+    "Great job! I can tell you're thinking hard about this. What do you think?",
+    "Ooh, I like that! Can you explain more?",
+    "That's such a cool idea! Tell me more!"
   ];
   
   // Simple response selection based on message length and content
@@ -166,12 +197,21 @@ function generateFallbackResponse(
   // Check if it's a greeting
   const greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon'];
   if (greetings.some(g => userMessage.toLowerCase().includes(g))) {
-    selectedResponse = "Hello! It's so nice to talk with you today! How are you feeling?";
+    selectedResponse = "Hi there! I'm so happy to talk with you! How are you doing today?";
   }
   
   // Check if it's a question
   if (userMessage.includes('?')) {
-    selectedResponse = "That's a great question! Let me think... What do you think about it?";
+    selectedResponse = "Ooh, that's such a good question! Let me think... What do YOU think about it? I'd love to hear your thoughts!";
+  }
+  
+  // Check for emotional words
+  if (userMessage.toLowerCase().includes('sad') || userMessage.toLowerCase().includes('upset')) {
+    selectedResponse = "I can hear that you're not feeling great right now. That's okay - everyone feels that way sometimes. Want to talk about it?";
+  }
+  
+  if (userMessage.toLowerCase().includes('happy') || userMessage.toLowerCase().includes('excited')) {
+    selectedResponse = "Yay! I can tell you're feeling happy! That makes me happy too! What's making you feel so good?";
   }
   
   // Check if minimum training is complete
