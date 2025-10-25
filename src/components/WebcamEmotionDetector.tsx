@@ -49,61 +49,54 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
   const [currentEmotion, setCurrentEmotion] = useState<EmotionAnalysis | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [showVideo, setShowVideo] = useState(true);
-  const [webcamConfig, setWebcamConfig] = useState<WebcamConfig>({ ...DEFAULT_CONFIG, ...config });
+  const [webcamConfig, setWebcamConfig] = useState<WebcamConfig>({
+    ...DEFAULT_CONFIG,
+    ...config,
+  });
 
-  // Initialize face detection service and pre-load models
   useEffect(() => {
     faceServiceRef.current = FaceDetectionService.getInstance();
-    // Pre-load models in background to avoid delay when camera starts
-    faceServiceRef.current.loadModels().catch(err => {
-      console.error('Failed to pre-load face detection models:', err);
-    });
   }, []);
 
-  // Handle permission changes
   useEffect(() => {
     onPermissionChange?.(cameraState);
   }, [cameraState, onPermissionChange]);
 
-  // Auto-start camera when config.enabled changes to true
-  useEffect(() => {
-    if (config.enabled && !webcamConfig.enabled && cameraState.status === 'prompt') {
-      console.log('🎬 Auto-starting camera from config.enabled');
-      startCamera();
-    }
-  }, [config.enabled, webcamConfig.enabled, cameraState.status, startCamera]);
-
-  // Start detection loop
   const startDetectionLoop = useCallback(() => {
     if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
 
     const detectEmotions = async () => {
-      if (!faceServiceRef.current || !videoRef.current || !webcamConfig.enabled) return;
-      
-      // Ensure video has valid frame data (readyState 4 = HAVE_ENOUGH_DATA)
-      if (videoRef.current.readyState < 2) {
-        console.log('⏳ Video not ready for detection yet (readyState:', videoRef.current.readyState, ')');
+      if (!faceServiceRef.current || !videoRef.current) {
+        console.warn('⚠️ Detection skipped - ', {
+          hasService: !!faceServiceRef.current,
+          hasVideo: !!videoRef.current,
+        });
         return;
       }
-      
-      const analysis = await faceServiceRef.current.detectEmotions(videoRef.current);
-      if (analysis) {
-        setCurrentEmotion(analysis);
-        onEmotionDetected?.(analysis);
+
+      try {
+        console.log('🔍 Detecting emotions from video...');
+        const analysis = await faceServiceRef.current.detectEmotions(videoRef.current);
+        
+        if (analysis) {
+          console.log('✅ Emotion detected:', analysis);
+          setCurrentEmotion(analysis);
+          onEmotionDetected?.(analysis);
+        } else {
+          console.warn('⚠️ No emotion analysis returned');
+        }
+      } catch (error) {
+        console.error('❌ Error during emotion detection:', error);
       }
     };
 
-    // Wait a bit before starting to ensure video has first frame
-    setTimeout(() => {
-      detectEmotions();
-      detectionIntervalRef.current = setInterval(detectEmotions, webcamConfig.detectionInterval);
-    }, 500);
+    detectEmotions();
+    detectionIntervalRef.current = setInterval(detectEmotions, webcamConfig.detectionInterval);
   }, [webcamConfig.enabled, webcamConfig.detectionInterval, onEmotionDetected]);
 
-  // ✅ Combined, corrected startCamera
   const startCamera = useCallback(async () => {
     if (!faceServiceRef.current) {
-      console.error('Face detection service not initialized');
+      console.error('❌ Face detection service not initialized');
       setCameraState({
         status: 'denied',
         error: 'Face detection service not initialized',
@@ -112,71 +105,93 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
     }
 
     try {
+      console.log('⚙️ Loading models...');
       setCameraState({ status: 'checking' });
-
-      console.log('📦 Loading face detection models...');
       await faceServiceRef.current.loadModels();
-      console.log('✅ Models loaded, requesting camera access...');
+
+      console.log('🎥 Requesting camera access...');
       const stream = await faceServiceRef.current.requestCameraAccess();
+      console.log('✅ Got camera stream:', stream);
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-
-        await new Promise<void>((resolve, reject) => {
-          const video = videoRef.current!;
-          if (video.readyState >= 2) {
-            resolve();
-            return;
-          }
-
-          const onLoadedMetadata = () => {
-            video.removeEventListener('loadedmetadata', onLoadedMetadata);
-            video.removeEventListener('error', onError);
-            resolve();
-          };
-
-          const onError = (e: Event) => {
-            video.removeEventListener('loadedmetadata', onLoadedMetadata);
-            video.removeEventListener('error', onError);
-            reject(new Error('Video element error: ' + (e as any).message));
-          };
-
-          video.addEventListener('loadedmetadata', onLoadedMetadata);
-          video.addEventListener('error', onError);
-
-          setTimeout(() => {
-            video.removeEventListener('loadedmetadata', onLoadedMetadata);
-            video.removeEventListener('error', onError);
-            reject(new Error('Timeout waiting for video metadata'));
-          }, 5000);
-        });
-
-        await videoRef.current.play();
-        console.log('✅ Video is now playing, readyState:', videoRef.current.readyState);
-        
-        // Wait for at least one frame to be available
-        if (videoRef.current.readyState < 2) {
-          console.log('⏳ Waiting for video frame data...');
-          await new Promise<void>((resolve) => {
-            const checkReady = () => {
-              if (videoRef.current && videoRef.current.readyState >= 2) {
-                console.log('✅ Video frame data ready');
-                resolve();
-              } else {
-                setTimeout(checkReady, 100);
-              }
-            };
-            checkReady();
-          });
-        }
+      if (!stream) {
+        throw new Error('No camera stream returned.');
       }
 
+      let video = videoRef.current;
+      let retries = 0;
+      
+      // Retry finding video element if it's not immediately available
+      while (!video && retries < 10) {
+        console.warn(`⚠️ Video element not found, retrying... (${retries + 1}/10)`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        video = videoRef.current;
+        retries++;
+      }
+      
+      if (!video) {
+        console.error('❌ Video element not found after retries.');
+        setCameraState({
+          status: 'denied',
+          error: 'Video element not found',
+        });
+        return;
+      }
+      
+      console.log('✅ Video element found');
+
+      // Assign stream to video element
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('autoplay', 'true');
+
+      console.log('🎞️ Setting video stream...');
+
+      // Wait for video to be ready and start playing
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Video playback timeout'));
+        }, 5000);
+
+        const playVideo = async () => {
+          try {
+            await video.play();
+            console.log('✅ Video playback started successfully');
+            clearTimeout(timeout);
+            resolve();
+          } catch (err) {
+            console.warn('⚠️ video.play() failed, retrying...', err);
+            setTimeout(playVideo, 500);
+          }
+        };
+
+        if (video.readyState >= 2) {
+          playVideo();
+        } else {
+          video.onloadedmetadata = playVideo;
+        }
+      });
+
+      // Log active tracks for debugging
+      const tracks = stream.getVideoTracks();
+      if (tracks.length > 0) {
+        console.log('🎬 Active video track:', tracks[0].label);
+      } else {
+        console.error('❌ No active video track found.');
+      }
+
+      // Camera ready
+      setWebcamConfig((prev) => ({ ...prev, enabled: true }));
       setCameraState({ status: 'granted' });
-      setWebcamConfig(prev => ({ ...prev, enabled: true }));
-      setCurrentEmotion(null);
-      startDetectionLoop();
+
+      console.log('🧠 Starting emotion detection loop in 500ms...');
+      setTimeout(() => {
+        console.log('▶️ Emotion detection loop started');
+        startDetectionLoop();
+      }, 500);
     } catch (error: any) {
-      console.error('Camera error:', error);
+      console.error('🚫 Camera error:', error);
 
       let errorMessage = 'Camera access was denied or unavailable';
       if (error.name === 'NotAllowedError') {
@@ -187,36 +202,36 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
         errorMessage = 'Camera is already in use by another application.';
       }
 
-      setCameraState({
-        status: 'denied',
-        error: errorMessage,
-      });
+      setCameraState({ status: 'denied', error: errorMessage });
     }
   }, [startDetectionLoop]);
 
-  // ✅ Added missing stopCamera
   const stopCamera = useCallback(() => {
     if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
-    const stream = videoRef.current?.srcObject as MediaStream | null;
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current!.srcObject = null;
-    }
-    setWebcamConfig(prev => ({ ...prev, enabled: false }));
-    setCameraState({ status: 'prompt' });
+    faceServiceRef.current?.stopCameraStream();
+
+    if (videoRef.current) videoRef.current.srcObject = null;
+
+    setWebcamConfig((prev) => ({ ...prev, enabled: false }));
     setCurrentEmotion(null);
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => stopCamera();
   }, [stopCamera]);
 
-  // Toggle camera
-  const toggleCamera = () => {
-    if (webcamConfig.enabled) stopCamera();
-    else startCamera();
-  };
+  const toggleCamera = useCallback(async () => {
+    if (webcamConfig.enabled) {
+      stopCamera();
+    } else {
+      // Ensure video element is mounted before starting camera
+      if (!videoRef.current) {
+        console.warn('⚠️ Video element not ready, waiting...');
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      await startCamera();
+    }
+  }, [webcamConfig.enabled, stopCamera, startCamera]);
 
   const getEngagementIndicator = () => {
     if (!currentEmotion) return null;
@@ -264,7 +279,12 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
 
           <div className="flex items-center gap-1">
             {webcamConfig.enabled && (
-              <Button variant="ghost" size="sm" onClick={() => setShowVideo(!showVideo)} className="h-7 w-7 p-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowVideo(!showVideo)}
+                className="h-7 w-7 p-0"
+              >
                 {showVideo ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
               </Button>
             )}
@@ -285,6 +305,7 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
               size="sm"
               onClick={toggleCamera}
               className={cn('h-7 w-7 p-0', webcamConfig.enabled && 'text-green-600')}
+              disabled={cameraState.status === 'checking'}
             >
               {webcamConfig.enabled ? <Camera className="h-3 w-3" /> : <CameraOff className="h-3 w-3" />}
             </Button>
@@ -293,42 +314,44 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
 
         {!isMinimized && (
           <div className="p-2">
-            {webcamConfig.enabled && showVideo && (
-              <div className="relative mb-2">
-                <video
-                  ref={videoRef}
-                  className="w-full h-32 object-cover rounded-md bg-black"
-                  autoPlay
-                  playsInline
-                  muted
-                />
+            {/* Video element always in DOM but hidden when not in use */}
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{
+                width: '320px',
+                height: '240px',
+                backgroundColor: 'black',
+                borderRadius: '12px',
+                objectFit: 'cover',
+                display: webcamConfig.enabled && showVideo ? 'block' : 'none',
+              }}
+            />
 
-                {currentEmotion && (
-                  <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-                    <div className="bg-black/70 text-white px-2 py-1 rounded-md flex items-center gap-2">
-                      <span className="text-lg">
-                        {EMOTION_EMOJIS[currentEmotion.currentEmotion] || '🤔'}
-                      </span>
-                      <span className="text-xs">
-                        {currentEmotion.currentEmotion} ({Math.round(currentEmotion.confidence * 100)}%)
-                      </span>
-                    </div>
+            {webcamConfig.enabled && showVideo && currentEmotion && (
+              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                <div className="bg-black/70 text-white px-2 py-1 rounded-md flex items-center gap-2">
+                  <span className="text-lg">
+                    {EMOTION_EMOJIS[currentEmotion.currentEmotion] || '🤔'}
+                  </span>
+                  <span className="text-xs">
+                    {currentEmotion.currentEmotion} ({Math.round(currentEmotion.confidence * 100)}%)
+                  </span>
+                </div>
 
-                    <div className="bg-black/70 text-white px-2 py-1 rounded-md flex items-center gap-1">
-                      {getEngagementIndicator()}
-                      <span className="text-xs">{currentEmotion.engagementLevel}</span>
-                    </div>
-                  </div>
-                )}
+                <div className="bg-black/70 text-white px-2 py-1 rounded-md flex items-center gap-1">
+                  {getEngagementIndicator()}
+                  <span className="text-xs">{currentEmotion.engagementLevel}</span>
+                </div>
               </div>
             )}
 
             {!webcamConfig.enabled && (
               <div className="flex flex-col items-center justify-center h-32 text-center">
                 <CameraOff className="h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  Turn on camera to help me understand you better
-                </p>
+                <p className="text-sm text-muted-foreground">Turn on camera to help me understand you better</p>
                 <Button
                   variant="default"
                   size="sm"
@@ -338,9 +361,7 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
                 >
                   {cameraState.status === 'checking' ? 'Loading...' : 'Enable Camera'}
                 </Button>
-                {cameraState.error && (
-                  <p className="text-xs text-red-500 mt-2">{cameraState.error}</p>
-                )}
+                {cameraState.error && <p className="text-xs text-red-500 mt-2">{cameraState.error}</p>}
               </div>
             )}
 
