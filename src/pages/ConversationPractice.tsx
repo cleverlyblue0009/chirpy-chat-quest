@@ -96,7 +96,8 @@ export default function ConversationPractice() {
           setParentalConsent(consent);
           if (consent.features.facialDetection) {
             setShowEmotionDetector(true);
-            console.log('✅ Facial detection authorized by parent');
+            setEmotionDetectorEnabled(true); // Auto-enable detector when consent exists
+            console.log('✅ Facial detection authorized and enabled by parent');
           }
         } else {
           console.log('ℹ️ No parental consent found, will show modal');
@@ -141,27 +142,58 @@ export default function ConversationPractice() {
     if (analysis.confidence > 0.5) {
       const negativeEmotions = ['angry', 'sad', 'fearful', 'disgusted'];
       if (negativeEmotions.includes(analysis.currentEmotion)) {
-        console.log('⚠️ Negative emotion detected! Triggering immediate response...');
+        console.log('⚠️ Negative emotion detected! Triggering immediate response...', {
+          emotion: analysis.currentEmotion,
+          confidence: analysis.confidence,
+          hasConversationId: !!conversationId,
+          hasBirdCharacter: !!birdCharacter
+        });
         // Trigger immediate emotional support with a small delay to ensure state is updated
-        setTimeout(() => generateEmotionalSupportMessage(true), 500);
+        setTimeout(() => {
+          console.log('🔔 Executing delayed emotional support for negative emotion');
+          generateEmotionalSupportMessage(true);
+        }, 500);
       } else if (analysis.currentEmotion === 'happy' && analysis.confidence > 0.7) {
         // Also respond immediately to strong positive emotions
         console.log('😊 Strong positive emotion detected! Celebrating with user...');
-        setTimeout(() => generateEmotionalSupportMessage(true), 500);
+        setTimeout(() => {
+          console.log('🔔 Executing delayed emotional support for positive emotion');
+          generateEmotionalSupportMessage(true);
+        }, 500);
       }
     }
     
     // Also trigger for low engagement
     if (analysis.engagementLevel === 'low' && analysis.confidence > 0.5) {
-      console.log('📉 Low engagement detected! Triggering immediate response...');
-      setTimeout(() => generateEmotionalSupportMessage(true), 500);
+      console.log('📉 Low engagement detected! Triggering immediate response...', {
+        engagementLevel: analysis.engagementLevel,
+        confidence: analysis.confidence,
+        hasConversationId: !!conversationId,
+        hasBirdCharacter: !!birdCharacter,
+        isBirdSpeaking,
+        isLoading
+      });
+      setTimeout(() => {
+        console.log('🔔 Executing delayed emotional support for low engagement');
+        generateEmotionalSupportMessage(true);
+      }, 500);
     }
-  }, [generateEmotionalSupportMessage]);
+  }, [generateEmotionalSupportMessage, conversationId, birdCharacter, isBirdSpeaking, isLoading]);
   
   // Generate proactive emotional support message from chatbot
   const generateEmotionalSupportMessage = useCallback(async (forceImmediate: boolean = false) => {
-    if (!currentEmotion || !emotionDetectorEnabled || !birdCharacter || !conversationId) return;
-    if (isBirdSpeaking || isLoading) return;
+    if (!currentEmotion || !birdCharacter || !conversationId) {
+      console.log('⚠️ Cannot generate emotional support:', {
+        hasEmotion: !!currentEmotion,
+        hasBirdCharacter: !!birdCharacter,
+        hasConversationId: !!conversationId
+      });
+      return;
+    }
+    if (isBirdSpeaking || isLoading) {
+      console.log('⚠️ Skipping emotional support: chatbot busy', { isBirdSpeaking, isLoading });
+      return;
+    }
     
     const now = Date.now();
     // Only respond to emotion changes every 15 seconds to avoid spamming (unless forced)
@@ -279,7 +311,7 @@ export default function ConversationPractice() {
     } else if (forceImmediate) {
       console.log('⚠️ Forced immediate response but no message to send');
     }
-  }, [currentEmotion, emotionDetectorEnabled, birdCharacter, conversationId, isBirdSpeaking, isLoading, lastEmotionResponseTime, strugglingSignals, conversationExchanges]);
+  }, [currentEmotion, birdCharacter, conversationId, isBirdSpeaking, isLoading, lastEmotionResponseTime, strugglingSignals, conversationExchanges]);
   
   // Handle parental consent
   const handleParentalConsent = async (consent: ParentalConsent) => {
