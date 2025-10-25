@@ -136,43 +136,106 @@ export default function ConversationPractice() {
       
       return updated;
     });
-  }, []);
+    
+    // IMMEDIATE response for negative emotions or low engagement
+    if (analysis.confidence > 0.5) {
+      const negativeEmotions = ['angry', 'sad', 'fearful', 'disgusted'];
+      if (negativeEmotions.includes(analysis.currentEmotion)) {
+        console.log('⚠️ Negative emotion detected! Triggering immediate response...');
+        // Trigger immediate emotional support with a small delay to ensure state is updated
+        setTimeout(() => generateEmotionalSupportMessage(true), 500);
+      } else if (analysis.currentEmotion === 'happy' && analysis.confidence > 0.7) {
+        // Also respond immediately to strong positive emotions
+        console.log('😊 Strong positive emotion detected! Celebrating with user...');
+        setTimeout(() => generateEmotionalSupportMessage(true), 500);
+      }
+    }
+    
+    // Also trigger for low engagement
+    if (analysis.engagementLevel === 'low' && analysis.confidence > 0.5) {
+      console.log('📉 Low engagement detected! Triggering immediate response...');
+      setTimeout(() => generateEmotionalSupportMessage(true), 500);
+    }
+  }, [generateEmotionalSupportMessage]);
   
   // Generate proactive emotional support message from chatbot
-  const generateEmotionalSupportMessage = useCallback(async () => {
+  const generateEmotionalSupportMessage = useCallback(async (forceImmediate: boolean = false) => {
     if (!currentEmotion || !emotionDetectorEnabled || !birdCharacter || !conversationId) return;
     if (isBirdSpeaking || isLoading) return;
     
     const now = Date.now();
-    // Only respond to emotion changes every 15 seconds to avoid spamming
-    if (now - lastEmotionResponseTime < 15000) return;
-    
-    const signals = strugglingSignals;
-    if (!signals) return;
+    // Only respond to emotion changes every 15 seconds to avoid spamming (unless forced)
+    if (!forceImmediate && now - lastEmotionResponseTime < 15000) return;
     
     let shouldRespond = false;
     let emotionalMessage = '';
     
-    // Check if chatbot should proactively respond to emotional state
-    if (signals.frustration && currentEmotion.confidence > 0.6) {
+    // IMMEDIATE responses for strong emotions (angry, sad, very happy)
+    if (forceImmediate && currentEmotion.confidence > 0.5) {
       shouldRespond = true;
-      emotionalMessage = "I can see this is a bit tricky! That's totally okay. Let's take it one step at a time together. You're doing great!";
-    } else if (signals.confusion && currentEmotion.confidence > 0.6) {
-      shouldRespond = true;
-      emotionalMessage = "Hmm, you look a bit puzzled! Would you like me to explain that in a different way? I'm here to help!";
-    } else if (signals.frequentLookingAway && conversationExchanges > 2) {
-      shouldRespond = true;
-      emotionalMessage = "I notice you're looking away. Do you need a little break? Or would you like to talk about something else? Whatever feels good!";
-    } else if (signals.lowEngagement && conversationExchanges > 3) {
-      shouldRespond = true;
-      emotionalMessage = "Let's make this more fun! What do you want to talk about? I'm really interested in hearing your ideas!";
-    } else if (currentEmotion.currentEmotion === 'happy' && currentEmotion.confidence > 0.7 && currentEmotion.engagementLevel === 'high') {
-      shouldRespond = true;
-      emotionalMessage = "I can see you're so happy! Your smile makes me happy too! Tell me more - I love your enthusiasm!";
+      
+      if (currentEmotion.currentEmotion === 'angry') {
+        const angryResponses = [
+          "Oh, I can see you're feeling frustrated! That's okay. Let's make this more fun! Want to try something different?",
+          "Hey, I notice you might be upset. We can take a break if you want, or do something else! What sounds good?",
+          "I can see this might be tough right now. No worries! We can do this later when you're ready. How about we talk about something you like?",
+          "It's okay to feel frustrated sometimes! Let's take a deep breath together. Want to talk about what's bothering you?",
+        ];
+        emotionalMessage = angryResponses[Math.floor(Math.random() * angryResponses.length)];
+      } else if (currentEmotion.currentEmotion === 'sad') {
+        const sadResponses = [
+          "I can see you're feeling a bit down. That's totally okay. I'm here for you! Want to talk about it or do something fun?",
+          "You look sad. Remember, it's okay to feel this way! We can do this later if you want. What would make you feel better?",
+          "I notice you're not feeling great. Let's make this more cheerful! What makes you happy? Tell me about it!",
+        ];
+        emotionalMessage = sadResponses[Math.floor(Math.random() * sadResponses.length)];
+      } else if (currentEmotion.currentEmotion === 'fearful') {
+        const fearfulResponses = [
+          "You seem a bit worried. Don't worry! I'm here to help you. We can go as slow as you need!",
+          "I can see you might be nervous. That's completely normal! We'll take this step by step together. You're doing amazing!",
+        ];
+        emotionalMessage = fearfulResponses[Math.floor(Math.random() * fearfulResponses.length)];
+      } else if (currentEmotion.currentEmotion === 'happy' && currentEmotion.confidence > 0.7) {
+        const happyResponses = [
+          "Wow! I can see you're so happy! Your smile makes me happy too! Tell me more!",
+          "You look so excited! I love your energy! What's making you feel so great?",
+          "Your happiness is contagious! This is so fun! Keep going!",
+        ];
+        emotionalMessage = happyResponses[Math.floor(Math.random() * happyResponses.length)];
+      } else if (currentEmotion.engagementLevel === 'low') {
+        const lowEngagementResponses = [
+          "Let's make this more fun! What do you want to talk about? I'm really curious!",
+          "Hey, want to try something different? We can talk about anything you like!",
+          "I want to make sure you're enjoying this! What would be more fun for you?",
+          "We can do this later if you want! Or maybe talk about something else? Your choice!",
+        ];
+        emotionalMessage = lowEngagementResponses[Math.floor(Math.random() * lowEngagementResponses.length)];
+      }
+    }
+    
+    // Fallback to pattern-based responses if not forced
+    if (!shouldRespond && strugglingSignals) {
+      const signals = strugglingSignals;
+      
+      // Check if chatbot should proactively respond to emotional state
+      if (signals.frustration && currentEmotion.confidence > 0.6) {
+        shouldRespond = true;
+        emotionalMessage = "I can see this is a bit tricky! That's totally okay. Let's take it one step at a time together. You're doing great!";
+      } else if (signals.confusion && currentEmotion.confidence > 0.6) {
+        shouldRespond = true;
+        emotionalMessage = "Hmm, you look a bit puzzled! Would you like me to explain that in a different way? I'm here to help!";
+      } else if (signals.frequentLookingAway && conversationExchanges > 2) {
+        shouldRespond = true;
+        emotionalMessage = "I notice you're looking away. Do you need a little break? Or would you like to talk about something else? Whatever feels good!";
+      } else if (signals.lowEngagement && conversationExchanges > 3) {
+        shouldRespond = true;
+        emotionalMessage = "Let's make this more fun! What do you want to talk about? I'm really interested in hearing your ideas!";
+      }
     }
     
     if (shouldRespond && emotionalMessage) {
       setLastEmotionResponseTime(now);
+      console.log('🤖 Sending emotional support message:', emotionalMessage);
       
       try {
         // Generate speech for the emotional support message
@@ -208,9 +271,13 @@ export default function ConversationPractice() {
         } else {
           useBrowserTTS(emotionalMessage);
         }
+        
+        console.log('✅ Emotional support message sent successfully');
       } catch (error) {
-        console.error('Error generating emotional support message:', error);
+        console.error('❌ Error generating emotional support message:', error);
       }
+    } else if (forceImmediate) {
+      console.log('⚠️ Forced immediate response but no message to send');
     }
   }, [currentEmotion, emotionDetectorEnabled, birdCharacter, conversationId, isBirdSpeaking, isLoading, lastEmotionResponseTime, strugglingSignals, conversationExchanges]);
   
