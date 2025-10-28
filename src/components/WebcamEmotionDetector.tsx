@@ -108,34 +108,55 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
     }
 
     try {
-      console.log('⚙️ Loading models...');
+      console.log('⚙️ Starting camera initialization...');
       setCameraState({ status: 'checking' });
+      
+      // First, check if we have camera permissions
+      if (navigator.permissions) {
+        try {
+          const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+          console.log('📹 Camera permission status:', permissionStatus.state);
+          
+          if (permissionStatus.state === 'denied') {
+            throw new Error('Camera permission was previously denied. Please allow camera access in your browser settings.');
+          }
+        } catch (permErr) {
+          console.warn('⚠️ Could not query camera permission:', permErr);
+          // Continue anyway, the getUserMedia call will handle permissions
+        }
+      }
+      
+      console.log('⚙️ Loading face detection models...');
       await faceServiceRef.current.loadModels();
+      console.log('✅ Models loaded successfully');
 
       console.log('🎥 Requesting camera access...');
       const stream = await faceServiceRef.current.requestCameraAccess();
-      console.log('✅ Got camera stream:', stream);
-
+      
       if (!stream) {
-        throw new Error('No camera stream returned.');
+        throw new Error('No camera stream returned. Please ensure your camera is connected and working.');
       }
+      
+      console.log('✅ Got camera stream');
 
+      // Wait for video element to be available
       let video = videoRef.current;
       let retries = 0;
       
-      // Retry finding video element if it's not immediately available
-      while (!video && retries < 10) {
-        console.warn(`⚠️ Video element not found, retrying... (${retries + 1}/10)`);
-        await new Promise(resolve => setTimeout(resolve, 100));
+      while (!video && retries < 15) {
+        console.warn(`⚠️ Video element not found, retrying... (${retries + 1}/15)`);
+        await new Promise(resolve => setTimeout(resolve, 200));
         video = videoRef.current;
         retries++;
       }
       
       if (!video) {
         console.error('❌ Video element not found after retries.');
+        // Stop the stream to avoid leaks
+        stream.getTracks().forEach(track => track.stop());
         setCameraState({
           status: 'denied',
-          error: 'Video element not found',
+          error: 'Video element not available. Please refresh the page and try again.',
         });
         return;
       }
@@ -146,66 +167,93 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
       video.srcObject = stream;
       video.muted = true;
       video.playsInline = true;
+      video.autoplay = true;
       video.setAttribute('playsinline', 'true');
       video.setAttribute('autoplay', 'true');
 
-      console.log('🎞️ Setting video stream...');
+      console.log('🎞️ Configuring video stream...');
 
       // Wait for video to be ready and start playing
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error('Video playback timeout'));
-        }, 5000);
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Video playback timeout after 10 seconds'));
+          }, 10000);
 
-        const playVideo = async () => {
-          try {
-            await video.play();
-            console.log('✅ Video playback started successfully');
-            clearTimeout(timeout);
-            resolve();
-          } catch (err) {
-            console.warn('⚠️ video.play() failed, retrying...', err);
-            setTimeout(playVideo, 500);
+          const playVideo = async () => {
+            try {
+              await video.play();
+              console.log('✅ Video playback started successfully');
+              clearTimeout(timeout);
+              resolve();
+            } catch (err) {
+              console.warn('⚠️ video.play() failed, retrying...', err);
+              setTimeout(playVideo, 300);
+            }
+          };
+
+          if (video.readyState >= 2) {
+            console.log('📹 Video ready, starting playback...');
+            playVideo();
+          } else {
+            console.log('⏳ Waiting for video metadata...');
+            video.onloadedmetadata = () => {
+              console.log('✅ Video metadata loaded');
+              playVideo();
+            };
           }
-        };
+        });
+      } catch (playError) {
+        console.error('❌ Video playback error:', playError);
+        throw new Error('Failed to start video playback. Please try again.');
+      }
 
-        if (video.readyState >= 2) {
-          playVideo();
-        } else {
-          video.onloadedmetadata = playVideo;
-        }
-      });
-
-      // Log active tracks for debugging
+      // Verify stream tracks
       const tracks = stream.getVideoTracks();
       if (tracks.length > 0) {
         console.log('🎬 Active video track:', tracks[0].label);
+        console.log('📐 Video track settings:', tracks[0].getSettings());
       } else {
         console.error('❌ No active video track found.');
+        throw new Error('No video track available from camera.');
       }
 
       // Camera ready
       setWebcamConfig((prev) => ({ ...prev, enabled: true }));
       setCameraState({ status: 'granted' });
+      console.log('✅ Camera fully initialized and ready');
 
-      console.log('🧠 Starting emotion detection loop in 500ms...');
+      // Start detection loop
+      console.log('🧠 Starting emotion detection loop in 1 second...');
       setTimeout(() => {
         console.log('▶️ Emotion detection loop started');
         startDetectionLoop();
-      }, 500);
+      }, 1000);
     } catch (error: any) {
-      console.error('🚫 Camera error:', error);
+      console.error('🚫 Camera initialization error:', error);
 
       let errorMessage = 'Camera access was denied or unavailable';
+      
       if (error.name === 'NotAllowedError') {
-        errorMessage = 'Camera permission was denied. Please allow camera access in your browser settings.';
+        errorMessage = 'Camera permission was denied. Please click the camera icon in your browser\'s address bar and allow access.';
       } else if (error.name === 'NotFoundError') {
         errorMessage = 'No camera found. Please connect a camera and try again.';
       } else if (error.name === 'NotReadableError') {
-        errorMessage = 'Camera is already in use by another application.';
+        errorMessage = 'Camera is already in use by another application. Please close other apps and try again.';
+      } else if (error.name === 'OverconstrainedError') {
+        errorMessage = 'Camera doesn\'t support required settings. Try a different camera.';
+      } else if (error.message) {
+        errorMessage = error.message;
       }
 
       setCameraState({ status: 'denied', error: errorMessage });
+      
+      // Clean up any stream that might have been created
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
     }
   }, [startDetectionLoop]);
 
@@ -400,19 +448,42 @@ export const WebcamEmotionDetector: React.FC<WebcamEmotionDetectorProps> = ({
             )}
 
             {!webcamConfig.enabled && (
-              <div className="flex flex-col items-center justify-center h-32 text-center">
-                <CameraOff className="h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">Turn on camera to help me understand you better</p>
+              <div className="flex flex-col items-center justify-center min-h-[160px] text-center px-4">
+                <CameraOff className="h-10 w-10 text-muted-foreground mb-3" />
+                <p className="text-sm text-muted-foreground mb-3">
+                  Turn on camera to help me understand you better
+                </p>
                 <Button
                   variant="default"
                   size="sm"
                   onClick={startCamera}
-                  className="mt-2"
                   disabled={cameraState.status === 'checking'}
+                  className="mb-2"
                 >
-                  {cameraState.status === 'checking' ? 'Loading...' : 'Enable Camera'}
+                  {cameraState.status === 'checking' ? (
+                    <>
+                      <span className="animate-pulse">⏳ Loading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-4 w-4 mr-2" />
+                      Enable Camera
+                    </>
+                  )}
                 </Button>
-                {cameraState.error && <p className="text-xs text-red-500 mt-2">{cameraState.error}</p>}
+                {cameraState.error && (
+                  <Alert className="mt-2 border-red-200 bg-red-50">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <AlertDescription className="text-xs text-red-800">
+                      {cameraState.error}
+                    </AlertDescription>
+                  </Alert>
+                )}
+                {cameraState.status === 'denied' && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    💡 Tip: Look for the camera icon in your browser's address bar
+                  </p>
+                )}
               </div>
             )}
 
