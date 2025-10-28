@@ -14,7 +14,11 @@ import {
   addDoc, 
   updateDoc, 
   getDoc,
-  Timestamp 
+  setDoc,
+  Timestamp,
+  query,
+  where,
+  getDocs
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
@@ -335,11 +339,15 @@ export default function ConversationPractice() {
     if (!currentUser) return;
     
     try {
-      await updateDoc(doc(db, 'parental_consent', currentUser.uid), {
+      // Use setDoc with merge to create or update the document
+      const consentDocRef = doc(db, 'parental_consent', currentUser.uid);
+      await setDoc(consentDocRef, {
         ...consent,
         userId: currentUser.uid,
         timestamp: Timestamp.now(),
-      });
+      }, { merge: true });
+      
+      console.log('✅ Parental consent saved successfully');
       
       setParentalConsent(consent);
       setShowConsentModal(false);
@@ -352,12 +360,17 @@ export default function ConversationPractice() {
           title: "Features Enabled",
           description: "Facial emotion detection has been enabled to better support learning.",
         });
+      } else {
+        toast({
+          title: "Preferences Saved",
+          description: "Your consent preferences have been saved successfully.",
+        });
       }
     } catch (error) {
       console.error('Error saving parental consent:', error);
       toast({
         title: "Error",
-        description: "Failed to save consent preferences",
+        description: "Failed to save consent preferences. Please try again.",
         variant: "destructive",
       });
     }
