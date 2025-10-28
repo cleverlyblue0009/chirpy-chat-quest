@@ -179,29 +179,96 @@ export class AchievementsService {
   static async initializeDefaultAchievements(): Promise<void> {
     try {
       const defaultAchievements: Omit<Achievement, 'id'>[] = [
+        // First Steps
         {
-          name: 'First Flight',
+          name: 'First Words',
           description: 'Complete your first conversation',
           icon: '🎯',
           unlock_criteria: { type: 'conversations_completed', value: 1 }
         },
         {
-          name: 'Chat Champion',
-          description: 'Complete 10 conversations',
+          name: 'Getting Started',
+          description: 'Earn your first 100 XP',
+          icon: '✨',
+          unlock_criteria: { type: 'total_xp', value: 100 }
+        },
+        
+        // XP Milestones
+        {
+          name: 'XP Explorer',
+          description: 'Earn 500 XP',
+          icon: '⭐',
+          unlock_criteria: { type: 'total_xp', value: 500 }
+        },
+        {
+          name: 'XP Adventurer',
+          description: 'Earn 1,000 XP',
+          icon: '🌟',
+          unlock_criteria: { type: 'total_xp', value: 1000 }
+        },
+        {
+          name: 'XP Champion',
+          description: 'Earn 2,500 XP',
+          icon: '💫',
+          unlock_criteria: { type: 'total_xp', value: 2500 }
+        },
+        {
+          name: 'XP Master',
+          description: 'Earn 5,000 XP',
+          icon: '🏆',
+          unlock_criteria: { type: 'total_xp', value: 5000 }
+        },
+        {
+          name: 'XP Legend',
+          description: 'Earn 10,000 XP',
+          icon: '👑',
+          unlock_criteria: { type: 'total_xp', value: 10000 }
+        },
+        
+        // Conversation Milestones
+        {
+          name: 'Chatty Bird',
+          description: 'Complete 5 conversations',
           icon: '💬',
+          unlock_criteria: { type: 'conversations_completed', value: 5 }
+        },
+        {
+          name: 'Conversation Pro',
+          description: 'Complete 10 conversations',
+          icon: '🗨️',
           unlock_criteria: { type: 'conversations_completed', value: 10 }
         },
         {
-          name: 'Conversation Master',
+          name: 'Talk Master',
+          description: 'Complete 25 conversations',
+          icon: '💭',
+          unlock_criteria: { type: 'conversations_completed', value: 25 }
+        },
+        {
+          name: 'Social Expert',
           description: 'Complete 50 conversations',
-          icon: '🏆',
+          icon: '🎭',
           unlock_criteria: { type: 'conversations_completed', value: 50 }
         },
         {
-          name: '3 Day Streak',
-          description: 'Practice for 3 days in a row',
+          name: 'Conversation Legend',
+          description: 'Complete 100 conversations',
+          icon: '🌈',
+          unlock_criteria: { type: 'conversations_completed', value: 100 }
+        },
+        
+        // Streak Achievements
+        {
+          name: 'Warm Up',
+          description: 'Practice 2 days in a row',
           icon: '🔥',
-          unlock_criteria: { type: 'streak_days', value: 3 }
+          unlock_criteria: { type: 'streak_days', value: 2 }
+        },
+        {
+          name: 'On Fire',
+          description: 'Practice 5 days in a row',
+          icon: '🔥',
+          unlock_criteria: { type: 'streak_days', value: 5 }
         },
         {
           name: 'Week Warrior',
@@ -210,13 +277,27 @@ export class AchievementsService {
           unlock_criteria: { type: 'streak_days', value: 7 }
         },
         {
-          name: 'Streak Master',
-          description: 'Maintain a 30-day streak',
+          name: 'Two Week Hero',
+          description: 'Maintain a 14-day streak',
           icon: '💪',
-          unlock_criteria: { type: 'streak_days', value: 30 }
+          unlock_criteria: { type: 'streak_days', value: 14 }
         },
         {
-          name: 'Level Up',
+          name: 'Streak Master',
+          description: 'Maintain a 30-day streak',
+          icon: '🎖️',
+          unlock_criteria: { type: 'streak_days', value: 30 }
+        },
+        
+        // Level Completion
+        {
+          name: 'First Steps',
+          description: 'Complete your first level',
+          icon: '📚',
+          unlock_criteria: { type: 'levels_completed', value: 1 }
+        },
+        {
+          name: 'Learning Path',
           description: 'Complete 5 levels',
           icon: '📈',
           unlock_criteria: { type: 'levels_completed', value: 5 }
@@ -228,46 +309,106 @@ export class AchievementsService {
           unlock_criteria: { type: 'levels_completed', value: 10 }
         },
         {
+          name: 'Almost There',
+          description: 'Complete 15 levels',
+          icon: '🎯',
+          unlock_criteria: { type: 'levels_completed', value: 15 }
+        },
+        {
+          name: 'Journey Complete',
+          description: 'Complete all 20 levels',
+          icon: '🦋',
+          unlock_criteria: { type: 'levels_completed', value: 20 }
+        },
+        
+        // Bird Collection
+        {
+          name: 'New Friend',
+          description: 'Unlock your second bird (500 XP)',
+          icon: '🐦',
+          unlock_criteria: { type: 'birds_unlocked', value: 2 }
+        },
+        {
           name: 'Bird Collector',
           description: 'Unlock 3 bird characters',
           icon: '🦜',
           unlock_criteria: { type: 'birds_unlocked', value: 3 }
         },
         {
+          name: 'Flock Builder',
+          description: 'Unlock 4 bird characters',
+          icon: '🦆',
+          unlock_criteria: { type: 'birds_unlocked', value: 4 }
+        },
+        {
+          name: 'Bird Enthusiast',
+          description: 'Unlock 5 bird characters',
+          icon: '🦉',
+          unlock_criteria: { type: 'birds_unlocked', value: 5 }
+        },
+        {
           name: 'Aviary Master',
-          description: 'Unlock all bird characters',
+          description: 'Unlock all 6 bird characters',
           icon: '🦅',
           unlock_criteria: { type: 'birds_unlocked', value: 6 }
         },
+        
+        // Performance
         {
-          name: 'Perfect Score',
+          name: 'Perfect Performance',
           description: 'Get 100% on any conversation',
           icon: '💯',
           unlock_criteria: { type: 'perfect_score', value: 100 }
         },
         {
-          name: 'XP Hunter',
-          description: 'Earn 1000 XP',
-          icon: '⭐',
-          unlock_criteria: { type: 'total_xp', value: 1000 }
+          name: 'Excellence',
+          description: 'Get 100% on 5 conversations',
+          icon: '🎯',
+          unlock_criteria: { type: 'perfect_score', value: 100, count: 5 }
         },
         {
-          name: 'XP Master',
-          description: 'Earn 5000 XP',
-          icon: '🌟',
-          unlock_criteria: { type: 'total_xp', value: 5000 }
+          name: 'Skill Builder',
+          description: 'Reach 50% progress in any skill',
+          icon: '📊',
+          unlock_criteria: { type: 'skill_progress', value: 50 }
         },
         {
-          name: 'Skill Specialist',
+          name: 'Skill Master',
           description: 'Master any skill to 100%',
           icon: '🎓',
           unlock_criteria: { type: 'skill_mastery', value: 100 }
         },
         {
-          name: 'Social Butterfly',
-          description: 'Complete all levels',
-          icon: '🦋',
-          unlock_criteria: { type: 'levels_completed', value: 20 }
+          name: 'All Skills Learned',
+          description: 'Master all skills to 100%',
+          icon: '🏅',
+          unlock_criteria: { type: 'all_skills_mastered', value: 100 }
+        },
+        
+        // Special Achievements
+        {
+          name: 'Speed Talker',
+          description: 'Complete a conversation in under 5 minutes',
+          icon: '⚡',
+          unlock_criteria: { type: 'speed_conversation', value: 300 }
+        },
+        {
+          name: 'Great Listener',
+          description: 'Maintain high engagement for entire conversation',
+          icon: '👂',
+          unlock_criteria: { type: 'high_engagement_full', value: 1 }
+        },
+        {
+          name: 'Pronunciation Pro',
+          description: 'Average 90%+ pronunciation in a conversation',
+          icon: '🗣️',
+          unlock_criteria: { type: 'pronunciation_excellence', value: 90 }
+        },
+        {
+          name: 'Emotional Intelligence',
+          description: 'Respond well to emotion detection 10 times',
+          icon: '💝',
+          unlock_criteria: { type: 'emotion_responses', value: 10 }
         }
       ];
       

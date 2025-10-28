@@ -21,6 +21,7 @@ import { db, storage } from "@/lib/firebase";
 import { generateAIResponse, generateInitialGreeting } from "@/lib/ai/conversationEngine";
 import { generateSpeech, playAudioWithAnimation } from "@/lib/speech/textToSpeech";
 import { analyzePronunciation } from "@/lib/speech/pronunciation";
+import { XPService } from "@/lib/firebase/xpService";
 import { WebcamEmotionDetector } from "@/components/WebcamEmotionDetector";
 import { ParentalConsentModal } from "@/components/ParentalConsentModal";
 import { FaceDetectionService } from "@/lib/emotion/faceDetection";
@@ -1071,15 +1072,128 @@ export default function ConversationPractice() {
     }
   };
 
-  const handleConversationComplete = (score: number, feedback: string) => {
-    toast({
-      title: "Great job! 🎉",
-      description: `You scored ${score}%! ${feedback}`,
-    });
+  const handleConversationComplete = async (score: number, feedback: string) => {
+    if (!currentUser) return;
     
-    setTimeout(() => {
-      navigate('/path');
-    }, 3000);
+    try {
+      // Calculate pronunciation average
+      const pronunciationScores = messages
+        .filter(m => m.sender === 'user' && m.pronunciation_score)
+        .map(m => m.pronunciation_score!);
+      const averagePronunciation = pronunciationScores.length > 0
+        ? pronunciationScores.reduce((a, b) => a + b, 0) / pronunciationScores.length
+        : undefined;
+
+      // Determine engagement level
+      const highEngagementCount = emotionHistory.filter(e => e.engagementLevel === 'high').length;
+      const engagementRatio = emotionHistory.length > 0 
+        ? highEngagementCount / emotionHistory.length 
+        : 0;
+      const emotionEngagement = engagementRatio > 0.7 ? 'high' : 
+                               engagementRatio > 0.4 ? 'medium' : 'low';
+
+      // Get conversation count to check if first
+      const conversationsRef = collection(db, 'conversations');
+      const userConversationsQuery = query(
+        conversationsRef,
+        where('user_id', '==', currentUser.uid),
+        where('completed_at', '!=', null)
+      );
+      const conversationsSnapshot = await getDocs(userConversationsQuery);
+      const isFirstConversation = conversationsSnapshot.size === 0;
+
+      // Calculate XP
+      const xpResult = XPService.calculateConversationXP({
+        score,
+        exchangeCount: conversationExchanges,
+        averagePronunciation,
+        emotionEngagement,
+        isFirstConversation,
+        difficulty: levelData?.difficulty_level || 'beginner',
+      });
+
+      // Award XP
+      const xpAward = await XPService.awardXP(
+        currentUser.uid,
+        xpResult.total,
+        'conversation_complete',
+        `Completed conversation in ${levelData?.name || 'level'}`,
+        {
+          levelId,
+          score,
+          exchangeCount: conversationExchanges,
+          breakdown: xpResult.breakdown,
+        }
+      );
+
+      // Show XP breakdown
+      const xpBreakdownText = xpResult.breakdown
+        .map(b => `• ${b.description}: +${b.amount} XP`)
+        .join('\n');
+
+      // Show celebration with XP info
+      toast({
+        title: "🎉 Conversation Complete!",
+        description: `Score: ${score}%\n\n✨ Earned ${xpResult.total} XP!\n${xpBreakdownText}`,
+        duration: 5000,
+      });
+
+      // Show level up notification if applicable
+      if (xpAward.leveledUp) {
+        setTimeout(() => {
+          toast({
+            title: "🎊 Level Up!",
+            description: `You reached Level ${xpAward.newLevel}! Keep up the great work!`,
+            duration: 4000,
+          });
+        }, 1500);
+      }
+
+      // Show bird unlock notifications
+      if (xpAward.unlockedBirds && xpAward.unlockedBirds.length > 0) {
+        setTimeout(() => {
+          xpAward.unlockedBirds!.forEach((birdName, index) => {
+            setTimeout(() => {
+              toast({
+                title: "🦜 New Bird Unlocked!",
+                description: `${birdName} wants to chat with you!`,
+                duration: 4000,
+              });
+            }, index * 2000);
+          });
+        }, 3000);
+      }
+
+      // Show achievement notifications
+      if (xpAward.unlockedAchievements && xpAward.unlockedAchievements.length > 0) {
+        setTimeout(() => {
+          xpAward.unlockedAchievements!.forEach((achievementId, index) => {
+            setTimeout(() => {
+              toast({
+                title: "🏆 Achievement Unlocked!",
+                description: `You earned: ${achievementId}`,
+                duration: 4000,
+              });
+            }, index * 2000);
+          });
+        }, xpAward.unlockedBirds && xpAward.unlockedBirds.length > 0 ? 5000 : 3000);
+      }
+
+      // Navigate back after showing notifications
+      setTimeout(() => {
+        navigate('/path');
+      }, 6000);
+    } catch (error) {
+      console.error('Error processing conversation completion:', error);
+      toast({
+        title: "Great job! 🎉",
+        description: `You scored ${score}%! ${feedback}`,
+      });
+      
+      setTimeout(() => {
+        navigate('/path');
+      }, 3000);
+    }
   };
 
   const replayAudio = (audioUrl: string) => {
