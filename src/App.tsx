@@ -14,6 +14,10 @@ import LearningPath from "./pages/LearningPath";
 import EnhancedLearningPath from "./pages/EnhancedLearningPath";
 import BirdCollection from "./pages/BirdCollection";
 import ConversationPractice from "./pages/ConversationPractice";
+import StructuredLesson from "./pages/StructuredLesson";
+import Achievements from "./pages/Achievements";
+import ParentDashboard from "./pages/ParentDashboard";
+import TherapistDashboard from "./pages/TherapistDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -56,7 +60,27 @@ const App = () => (
                 <BirdCollection />
               </ProtectedRoute>
             } />
+            <Route path="/achievements" element={
+              <ProtectedRoute requiresAssessment>
+                <Achievements />
+              </ProtectedRoute>
+            } />
+            <Route path="/parent-dashboard" element={
+              <ProtectedRoute requiresAssessment>
+                <ParentDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/therapist-dashboard" element={
+              <ProtectedRoute requiresAssessment>
+                <TherapistDashboard />
+              </ProtectedRoute>
+            } />
             <Route path="/conversation/:levelId" element={
+              <ProtectedRoute requiresAssessment>
+                <StructuredLesson />
+              </ProtectedRoute>
+            } />
+            <Route path="/conversation-freeform/:levelId" element={
               <ProtectedRoute requiresAssessment>
                 <ConversationPractice />
               </ProtectedRoute>

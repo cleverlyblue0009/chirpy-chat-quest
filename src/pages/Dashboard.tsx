@@ -80,38 +80,48 @@ export default function Dashboard() {
     loadAchievements();
   }, [currentUser]);
 
-  // Subscribe to skills progress
+  // Subscribe to skills progress - fetch from user_progress to determine completed levels
   useEffect(() => {
     if (!currentUser) return;
 
-    const skillsRef = collection(db, 'user_skills');
-    const q = query(skillsRef, where('user_id', '==', currentUser.uid));
+    const progressRef = collection(db, 'user_progress');
+    const q = query(progressRef, where('user_id', '==', currentUser.uid));
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const userSkills: Array<{ name: string; progress: number; isLocked?: boolean }> = [];
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+      // Get completed level numbers
+      const completedLevels: number[] = [];
       
       snapshot.forEach((doc) => {
         const data = doc.data();
-        userSkills.push({
-          name: data.skill_name,
-          progress: data.progress || 0,
-          isLocked: data.is_locked || false
-        });
+        if (data.status === 'completed') {
+          // Extract level number from level_id (e.g., "level_1" -> 1)
+          const levelNum = parseInt(data.level_id.replace('level_', ''));
+          if (!isNaN(levelNum)) {
+            completedLevels.push(levelNum);
+          }
+        }
       });
-
-      // If no skills in Firebase, use defaults
-      if (userSkills.length === 0) {
+      
+      // Import skills mapping dynamically
+      const { getSkillsWithProgress } = await import('@/lib/skills/skillsMapping');
+      const skillsData = getSkillsWithProgress(completedLevels);
+      
+      // Convert to display format
+      const displaySkills = skillsData
+        .filter(s => s.isUnlocked) // Only show unlocked skills
+        .map(s => ({
+          name: s.skill.name,
+          progress: s.proficiency,
+          isLocked: !s.isUnlocked
+        }));
+      
+      // If no skills unlocked yet, show a message
+      if (displaySkills.length === 0) {
         setSkills([
-          { name: "Greetings & Introductions", progress: 100 },
-          { name: "Turn-Taking", progress: 75 },
-          { name: "Active Listening", progress: 60 },
-          { name: "Emotion Recognition", progress: 40 },
-          { name: "Topic Maintenance", progress: 25 },
-          { name: "Asking Questions", progress: 0, isLocked: true },
-          { name: "Ending Conversations", progress: 0, isLocked: true },
+          { name: "Complete Level 1 to unlock your first skill!", progress: 0, isLocked: true }
         ]);
       } else {
-        setSkills(userSkills);
+        setSkills(displaySkills);
       }
     });
 
@@ -220,11 +230,11 @@ export default function Dashboard() {
             <div className="flex items-center gap-4">
               <div className="text-center bg-white/20 rounded-xl px-4 py-2">
                 <p className="text-2xl font-bold text-primary-foreground">{userStats.currentStreak}</p>
-                <p className="text-xs text-primary-foreground/80">Day Streak 🔥</p>
+                <p className="text-xs text-primary-foreground/80">Day Streak ??</p>
               </div>
               <div className="text-center bg-white/20 rounded-xl px-4 py-2">
                 <p className="text-2xl font-bold text-primary-foreground">{userStats.totalXP}</p>
-                <p className="text-xs text-primary-foreground/80">Total XP ✨</p>
+                <p className="text-xs text-primary-foreground/80">Total XP ?</p>
               </div>
             </div>
           </div>
@@ -280,10 +290,19 @@ export default function Dashboard() {
 
         {/* Recent Achievements */}
         <div>
-          <h2 className="text-2xl font-bold text-foreground mb-4 flex items-center gap-2">
-            <Award className="w-6 h-6 text-secondary" />
-            Recent Achievements
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
+              <Award className="w-6 h-6 text-secondary" />
+              Recent Achievements
+            </h2>
+            <Button 
+              variant="outline" 
+              onClick={() => navigate("/achievements")}
+              className="font-semibold"
+            >
+              View All
+            </Button>
+          </div>
           <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
             {achievements.length > 0 ? (
               achievements.map((achievement) => (
@@ -296,23 +315,15 @@ export default function Dashboard() {
                 />
               ))
             ) : (
-              <>
-                <AchievementBadge 
-                  icon={MessageCircle}
-                  title="First Conversation!"
-                  description="Complete your first conversation"
-                />
-                <AchievementBadge 
-                  icon={Calendar}
-                  title="3 Day Streak!"
-                  description="Keep practicing for 3 days"
-                />
-                <AchievementBadge 
-                  icon={BirdIcon}
-                  title="Bird Collector"
-                  description="Unlock new bird companions"
-                />
-              </>
+              <div className="w-full text-center py-8 text-gray-500">
+                <p>Complete lessons to unlock achievements!</p>
+                <Button 
+                  className="mt-4"
+                  onClick={() => navigate("/path")}
+                >
+                  Start Learning
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -356,6 +367,25 @@ export default function Dashboard() {
           </div>
         </Card>
 
+        {/* Parent & Therapist Dashboards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 shadow-lg hover:shadow-xl transition-all cursor-pointer" onClick={() => navigate("/parent-dashboard")}>
+            <h3 className="font-bold text-lg mb-2 text-purple-900">?? Parent Dashboard</h3>
+            <p className="text-sm text-purple-700">View detailed progress reports and track your child's learning journey</p>
+            <Button variant="outline" className="mt-4 w-full">
+              Open Parent View
+            </Button>
+          </Card>
+          
+          <Card className="p-6 bg-gradient-to-br from-blue-50 to-teal-50 shadow-lg hover:shadow-xl transition-all cursor-pointer" onClick={() => navigate("/therapist-dashboard")}>
+            <h3 className="font-bold text-lg mb-2 text-blue-900">?? Therapist Dashboard</h3>
+            <p className="text-sm text-blue-700">Access professional insights, emotion tracking, and pronunciation analysis</p>
+            <Button variant="outline" className="mt-4 w-full">
+              Open Therapist View
+            </Button>
+          </Card>
+        </div>
+
         {/* Bottom Navigation */}
         <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border shadow-soft-lg">
           <div className="container max-w-6xl mx-auto px-4">
@@ -372,9 +402,13 @@ export default function Dashboard() {
                 <BirdIcon className="w-6 h-6 mb-1" />
                 <span className="text-xs">Birds</span>
               </Button>
-              <Button variant="ghost" className="flex-col h-auto py-2">
+              <Button 
+                variant="ghost" 
+                className="flex-col h-auto py-2" 
+                onClick={() => navigate("/achievements")}
+              >
                 <Award className="w-6 h-6 mb-1" />
-                <span className="text-xs">Progress</span>
+                <span className="text-xs">Achievements</span>
               </Button>
             </div>
           </div>
