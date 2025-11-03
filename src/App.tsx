@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -18,6 +19,7 @@ import StructuredLesson from "./pages/StructuredLesson";
 import Achievements from "./pages/Achievements";
 import ParentDashboard from "./pages/ParentDashboard";
 import TherapistDashboard from "./pages/TherapistDashboard";
+import MiniChallenge from "./pages/MiniChallenge";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +30,7 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
+        <PWAInstallPrompt />
         <BrowserRouter>
           <Routes>
             {/* Public routes */}
@@ -83,6 +86,11 @@ const App = () => (
             <Route path="/conversation-freeform/:levelId" element={
               <ProtectedRoute requiresAssessment>
                 <ConversationPractice />
+              </ProtectedRoute>
+            } />
+            <Route path="/mini-challenge" element={
+              <ProtectedRoute requiresAssessment>
+                <MiniChallenge />
               </ProtectedRoute>
             } />
             

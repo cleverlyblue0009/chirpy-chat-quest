@@ -90,14 +90,47 @@ export default function ParentDashboard() {
           ]);
         }
         
-        // Generate weekly progress (mock data for now - would come from real data)
-        const weeks: WeeklyData[] = [
-          { week: 'Week 1', lessonsCompleted: 3, xpEarned: 150 },
-          { week: 'Week 2', lessonsCompleted: 5, xpEarned: 280 },
-          { week: 'Week 3', lessonsCompleted: 4, xpEarned: 220 },
-          { week: 'Week 4', lessonsCompleted: 7, xpEarned: 380 },
-        ];
-        setWeeklyProgress(weeks);
+        // Generate weekly progress from real data
+        const xpHistoryRef = collection(db, 'xp_history');
+        const xpHistoryQuery = query(xpHistoryRef, where('user_id', '==', currentUser.uid));
+        const xpHistorySnapshot = await getDocs(xpHistoryQuery);
+        
+        // Group by week
+        const weeklyData: { [key: string]: { lessons: number; xp: number } } = {};
+        const now = new Date();
+        
+        xpHistorySnapshot.forEach(doc => {
+          const data = doc.data();
+          const date = data.timestamp?.toDate();
+          if (!date) return;
+          
+          // Calculate week number from today
+          const weeksDiff = Math.floor((now.getTime() - date.getTime()) / (7 * 24 * 60 * 60 * 1000));
+          const weekKey = weeksDiff < 4 ? `Week ${4 - weeksDiff}` : null;
+          
+          if (weekKey && weeksDiff >= 0 && weeksDiff < 4) {
+            if (!weeklyData[weekKey]) {
+              weeklyData[weekKey] = { lessons: 0, xp: 0 };
+            }
+            weeklyData[weekKey].xp += data.amount || 0;
+            if (data.reason === 'lesson_complete' || data.reason === 'conversation_complete') {
+              weeklyData[weekKey].lessons += 1;
+            }
+          }
+        });
+        
+        // Convert to array format
+        const weeks: WeeklyData[] = [];
+        for (let i = 1; i <= 4; i++) {
+          const weekKey = `Week ${i}`;
+          weeks.push({
+            week: weekKey,
+            lessonsCompleted: weeklyData[weekKey]?.lessons || 0,
+            xpEarned: weeklyData[weekKey]?.xp || 0,
+          });
+        }
+        
+        setWeeklyProgress(weeks.reverse()); // Most recent week last
         
       } catch (error) {
         console.error('Error loading parent dashboard:', error);
@@ -247,12 +280,12 @@ ${alerts.join('\n')}
         {alerts.length > 0 && (
           <Card className="p-6 bg-yellow-50 border-yellow-200">
             <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
-              ⚠️ Areas Needing Practice
+              ?? Areas Needing Practice
             </h3>
             <ul className="space-y-2">
               {alerts.map((alert, index) => (
                 <li key={index} className="text-sm text-gray-700">
-                  • {alert}
+                  ? {alert}
                 </li>
               ))}
             </ul>
@@ -271,7 +304,7 @@ ${alerts.join('\n')}
                 <div className="flex justify-between text-sm mb-2">
                   <span className="font-medium">{week.week}</span>
                   <span className="text-gray-600">
-                    {week.lessonsCompleted} lessons • {week.xpEarned} XP
+                    {week.lessonsCompleted} lessons ? {week.xpEarned} XP
                   </span>
                 </div>
                 <div className="h-8 bg-gray-100 rounded-lg overflow-hidden">
@@ -323,7 +356,7 @@ ${alerts.join('\n')}
             <div className="space-y-3">
               {achievements.slice(0, 5).map((achievement, index) => (
                 <div key={index} className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
-                  <div className="text-2xl">🏆</div>
+                  <div className="text-2xl">??</div>
                   <div className="flex-1">
                     <p className="font-semibold">{achievement.achievement_id}</p>
                     <p className="text-xs text-gray-600">
@@ -342,7 +375,7 @@ ${alerts.join('\n')}
 
         {/* Time Spent (coming soon) */}
         <Card className="p-6 bg-blue-50">
-          <h3 className="font-bold text-lg mb-2">📊 Detailed Analytics Coming Soon!</h3>
+          <h3 className="font-bold text-lg mb-2">?? Detailed Analytics Coming Soon!</h3>
           <p className="text-sm text-gray-700">
             Future updates will include: Time spent in app, Detailed pronunciation data, 
             Emotion tracking insights, and more!

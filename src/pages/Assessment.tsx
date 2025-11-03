@@ -48,52 +48,48 @@ export default function Assessment() {
         setQuestionsLoading(true);
         const fetchedQuestions = await fetchAssessmentQuestions();
         if (fetchedQuestions.length === 0) {
-          // Fallback questions if Firebase is empty
+          // Simple conversation-style questions
           const fallbackQuestions: AssessmentQuestion[] = [
             {
               id: 'q1',
               type: 'voice',
-              content: 'Say hello and tell me your name',
-              instructions: 'Click the microphone and introduce yourself',
+              content: 'Hello! Can you say hello back to me?',
+              instructions: 'Click the microphone and say hello',
               order: 1
             },
             {
               id: 'q2',
-              type: 'multiple_choice',
-              content: 'What do you say when you meet someone new?',
-              options: ['Goodbye', 'Nice to meet you', 'See you later', 'Go away'],
-              correctAnswer: 'Nice to meet you',
+              type: 'voice',
+              content: 'Great! What is your name?',
+              instructions: 'Tell me your name',
               order: 2
             },
             {
               id: 'q3',
-              type: 'emotion_recognition',
-              content: 'How does this person feel? 😊',
-              options: ['Happy', 'Sad', 'Angry', 'Scared'],
-              correctAnswer: 'Happy',
+              type: 'voice',
+              content: 'Nice to meet you! How are you feeling today?',
+              instructions: 'Tell me how you feel',
               order: 3
             },
             {
               id: 'q4',
               type: 'voice',
-              content: 'Someone says "How are you?" What do you say back?',
-              instructions: 'Click the microphone and respond',
+              content: 'What is your favorite thing to do for fun?',
+              instructions: 'Tell me about something you enjoy',
               order: 4
             },
             {
               id: 'q5',
-              type: 'ordering',
-              content: 'Put these conversation steps in order',
-              options: ['Say goodbye', 'Say hello', 'Ask a question', 'Listen to answer'],
-              correctAnswer: ['Say hello', 'Ask a question', 'Listen to answer', 'Say goodbye'],
+              type: 'voice',
+              content: 'If a friend asks "How are you?", what would you say?',
+              instructions: 'Say your answer',
               order: 5
             },
             {
               id: 'q6',
-              type: 'multiple_choice',
-              content: 'Your friend is crying. What should you do?',
-              options: ['Laugh', 'Walk away', 'Ask if they\'re okay', 'Ignore them'],
-              correctAnswer: 'Ask if they\'re okay',
+              type: 'voice',
+              content: 'Thank you for talking with me! Can you say goodbye?',
+              instructions: 'Say goodbye',
               order: 6
             }
           ];
@@ -238,135 +234,49 @@ export default function Assessment() {
   };
 
   const canProceed = () => {
-    switch (question.type) {
-      case 'voice':
-        return transcript.length > 0;
-      case 'multiple_choice':
-      case 'emotion_recognition':
-        return selectedOption.length > 0;
-      case 'ordering':
-        return orderedOptions.length === question.options?.length;
-      default:
-        return false;
-    }
+    // All questions are voice-based
+    return transcript.length > 0;
   };
 
   const renderQuestion = () => {
-    switch (question.type) {
-      case 'voice':
-        return (
-          <div className="space-y-4">
-            <p className="text-lg font-medium">{question.content}</p>
-            {question.instructions && (
-              <p className="text-sm text-muted-foreground">{question.instructions}</p>
+    // All questions are voice-based conversations
+    return (
+      <div className="space-y-4">
+        <p className="text-lg font-medium">{question.content}</p>
+        {question.instructions && (
+          <p className="text-sm text-muted-foreground">{question.instructions}</p>
+        )}
+        
+        <div className="flex flex-col items-center space-y-4">
+          <Button
+            size="lg"
+            variant={isRecording ? "destructive" : "default"}
+            className="rounded-full w-20 h-20"
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+          >
+            {isRecording ? (
+              <MicOff className="h-8 w-8" />
+            ) : (
+              <Mic className="h-8 w-8" />
             )}
-            
-            <div className="flex flex-col items-center space-y-4">
-              <Button
-                size="lg"
-                variant={isRecording ? "destructive" : "default"}
-                className="rounded-full w-20 h-20"
-                onClick={isRecording ? handleStopRecording : handleStartRecording}
-              >
-                {isRecording ? (
-                  <MicOff className="h-8 w-8" />
-                ) : (
-                  <Mic className="h-8 w-8" />
-                )}
-              </Button>
-              
-              {isRecording && (
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                  <span className="text-sm">Recording...</span>
-                </div>
-              )}
-              
-              {transcript && !isRecording && (
-                <div className="p-4 bg-muted rounded-lg w-full">
-                  <p className="text-sm font-medium mb-1">You said:</p>
-                  <p>{transcript}</p>
-                </div>
-              )}
+          </Button>
+          
+          {isRecording && (
+            <div className="flex items-center space-x-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-sm">Recording...</span>
             </div>
-          </div>
-        );
-      
-      case 'multiple_choice':
-      case 'emotion_recognition':
-        return (
-          <div className="space-y-4">
-            <p className="text-lg font-medium">{question.content}</p>
-            
-            <RadioGroup value={selectedOption} onValueChange={setSelectedOption}>
-              {question.options?.map((option) => (
-                <div key={option} className="flex items-center space-x-2">
-                  <RadioGroupItem value={option} id={option} />
-                  <Label 
-                    htmlFor={option} 
-                    className="cursor-pointer flex-1 p-3 rounded-lg hover:bg-muted"
-                  >
-                    {option}
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
-        );
-      
-      case 'ordering':
-        return (
-          <div className="space-y-4">
-            <p className="text-lg font-medium">{question.content}</p>
-            
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Click items in the correct order:
-              </p>
-              
-              {/* Available options */}
-              <div className="grid grid-cols-2 gap-2">
-                {question.options?.filter(opt => !orderedOptions.includes(opt)).map((option) => (
-                  <Button
-                    key={option}
-                    variant="outline"
-                    onClick={() => setOrderedOptions(prev => [...prev, option])}
-                  >
-                    {option}
-                  </Button>
-                ))}
-              </div>
-              
-              {/* Ordered selections */}
-              {orderedOptions.length > 0 && (
-                <div className="mt-4 p-4 bg-muted rounded-lg">
-                  <p className="text-sm font-medium mb-2">Your order:</p>
-                  <ol className="list-decimal list-inside space-y-1">
-                    {orderedOptions.map((option, index) => (
-                      <li key={index} className="text-sm">
-                        {option}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="ml-2"
-                          onClick={() => setOrderedOptions(prev => 
-                            prev.filter((_, i) => i !== index)
-                          )}
-                        >
-                          Remove
-                        </Button>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
+          )}
+          
+          {transcript && !isRecording && (
+            <div className="p-4 bg-muted rounded-lg w-full">
+              <p className="text-sm font-medium mb-1">You said:</p>
+              <p>{transcript}</p>
             </div>
-          </div>
-        );
-      
-      default:
-        return null;
-    }
+          )}
+        </div>
+      </div>
+    );
   };
 
   if (questionsLoading) {

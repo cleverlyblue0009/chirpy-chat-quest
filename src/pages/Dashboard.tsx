@@ -361,7 +361,11 @@ export default function Dashboard() {
                 Reward: +50 XP
               </p>
             </div>
-            <Button variant="secondary" className="font-bold">
+            <Button 
+              variant="secondary" 
+              className="font-bold"
+              onClick={() => navigate("/mini-challenge")}
+            >
               Start
             </Button>
           </div>
