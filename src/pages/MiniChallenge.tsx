@@ -25,107 +25,159 @@ interface ConversationPuzzle {
 const CONVERSATION_PUZZLES: ConversationPuzzle[] = [
   {
     id: "puzzle1",
-    scenario: "Your friend looks sad",
-    question: "What should you say?",
+    scenario: "😢 Your friend looks sad",
+    question: "What do you say?",
     options: [
-      "Ignore them",
-      "Are you okay? What's wrong?",
-      "That's your problem",
-      "Go away"
+      "Nothing",
+      "Are you okay?",
+      "Go away",
+      "Whatever"
     ],
     correctAnswer: 1,
-    explanation: "Asking if they're okay shows you care!"
+    explanation: "Great! Asking shows you care! 💙"
   },
   {
     id: "puzzle2",
-    scenario: "Someone is talking to you",
-    question: "What should you do?",
+    scenario: "👂 Someone is talking",
+    question: "What do you do?",
     options: [
       "Walk away",
-      "Look at them and listen",
+      "Look and listen!",
       "Talk over them",
-      "Look at your phone"
+      "Play on phone"
     ],
     correctAnswer: 1,
-    explanation: "Good listening means looking at the person!"
+    explanation: "Yes! Look at them when they talk! 👀"
   },
   {
     id: "puzzle3",
-    scenario: "You want to join a game",
-    question: "What should you say?",
+    scenario: "🎮 Kids are playing a game",
+    question: "How do you join?",
     options: [
-      "Can I play with you?",
-      "I'm playing now!",
+      "Can I play?",
       "Move over!",
-      "This is my game"
+      "I'm playing now!",
+      "This is mine!"
     ],
     correctAnswer: 0,
-    explanation: "Asking politely is the best way to join!"
+    explanation: "Perfect! Asking nicely works best! ⭐"
   },
   {
     id: "puzzle4",
-    scenario: "Someone shares good news",
-    question: "How should you respond?",
+    scenario: "🎉 Friend: I got 100 on my test!",
+    question: "What do you say?",
     options: [
-      "I don't care",
-      "That's awesome! I'm happy for you!",
-      "Whatever",
-      "My news is better"
+      "So what?",
+      "Awesome! High five!",
+      "Big deal",
+      "Mine was better"
     ],
     correctAnswer: 1,
-    explanation: "Share in their happiness! That's being a good friend!"
+    explanation: "Yes! Share their joy! That's friendship! 🌟"
   },
   {
     id: "puzzle5",
-    scenario: "You bump into someone",
-    question: "What should you say?",
+    scenario: "💥 Oops! You bump someone",
+    question: "What now?",
     options: [
-      "Watch where you're going!",
-      "Sorry! Are you okay?",
-      "That was your fault",
+      "Your fault!",
+      "Sorry! You okay?",
+      "Watch it!",
       "Say nothing"
     ],
     correctAnswer: 1,
-    explanation: "Saying sorry shows good manners!"
+    explanation: "Right! Saying sorry is kind! 💚"
   },
   {
     id: "puzzle6",
-    scenario: "Someone is telling a story",
-    question: "What shows you're interested?",
+    scenario: "📖 Friend is telling a story",
+    question: "Show you're listening!",
     options: [
-      "Yawn and look away",
-      "Check your watch",
-      "Nod and ask questions",
-      "Talk about yourself"
+      "Yawn",
+      "Look away",
+      "Nod and smile",
+      "Talk about me"
     ],
     correctAnswer: 2,
-    explanation: "Asking questions shows you're listening!"
+    explanation: "Exactly! Nodding shows you care! 😊"
   },
   {
     id: "puzzle7",
-    scenario: "Your friend got a new pet",
-    question: "What's a good question to ask?",
+    scenario: "🐶 Friend: I got a puppy!",
+    question: "What do you ask?",
     options: [
-      "I don't like pets",
-      "What's its name? Can I meet it?",
-      "Pets are boring",
-      "I have better pets"
+      "I don't care",
+      "What's its name?",
+      "Puppies are dumb",
+      "Mine is better"
     ],
     correctAnswer: 1,
-    explanation: "Asking about their pet shows you're interested!"
+    explanation: "Perfect! Ask about it! Show interest! 🎈"
   },
   {
     id: "puzzle8",
-    scenario: "Someone interrupts you",
-    question: "What should you say?",
+    scenario: "✋ Someone interrupts you",
+    question: "What do you say?",
     options: [
       "Be quiet!",
-      "One moment, let me finish please",
-      "You're so rude!",
-      "Stop talking!"
+      "Hold on please",
+      "You're rude!",
+      "Shut up!"
     ],
     correctAnswer: 1,
-    explanation: "Being polite but firm is best!"
+    explanation: "Great! Stay calm and polite! 🌈"
+  },
+  {
+    id: "puzzle9",
+    scenario: "🎂 Party invitation time!",
+    question: "How do you invite someone?",
+    options: [
+      "You have to come!",
+      "Want to come to my party?",
+      "Everyone but you",
+      "You can't come"
+    ],
+    correctAnswer: 1,
+    explanation: "Yes! Ask nicely and they'll be happy! 🎈"
+  },
+  {
+    id: "puzzle10",
+    scenario: "🏃 Friend trips and falls",
+    question: "What do you do?",
+    options: [
+      "Laugh at them",
+      "Help them up!",
+      "Take a photo",
+      "Keep walking"
+    ],
+    correctAnswer: 1,
+    explanation: "Awesome! Helping friends is what matters! 💪"
+  },
+  {
+    id: "puzzle11",
+    scenario: "🎨 Someone shows you their art",
+    question: "What do you say?",
+    options: [
+      "That's ugly",
+      "I love the colors!",
+      "I can do better",
+      "Meh"
+    ],
+    correctAnswer: 1,
+    explanation: "Perfect! Kind words make people happy! 🌟"
+  },
+  {
+    id: "puzzle12",
+    scenario: "🤔 You don't understand something",
+    question: "What should you do?",
+    options: [
+      "Pretend you know",
+      "Ask them to explain",
+      "Get mad",
+      "Give up"
+    ],
+    correctAnswer: 1,
+    explanation: "Smart! Asking questions helps you learn! 🧠"
   }
 ];
 
@@ -144,7 +196,7 @@ export default function MiniChallenge() {
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [conversationId, setConversationId] = useState<string>("");
   
-  const totalPuzzles = 5; // Show 5 random puzzles
+  const totalPuzzles = 6; // Show 6 random puzzles
   const [puzzles, setPuzzles] = useState<ConversationPuzzle[]>([]);
   const progress = ((currentPuzzleIndex + 1) / totalPuzzles) * 100;
 
@@ -172,7 +224,7 @@ export default function MiniChallenge() {
       setConversationId(conversationRef.id);
       
       // Ruby's introduction
-      const introMessage = `Hi! Let's solve some conversation puzzles! I'll give you situations and you pick the best response!`;
+      const introMessage = `Hi! Let's play Conversation Puzzles! Pick the best thing to say or do! Ready?`;
       
       const audioUrl = await generateSpeech(
         introMessage,
@@ -379,13 +431,13 @@ export default function MiniChallenge() {
           
           {!challengeStarted && !challengeComplete && (
             <Card className="p-8 text-center shadow-lg">
-              <div className="text-5xl mb-4">🧩</div>
-              <h3 className="text-2xl font-bold mb-4">Ready for Conversation Puzzles?</h3>
-              <p className="text-gray-700 mb-4">
-                Test your conversation skills! Pick the best response for different situations.
+              <div className="text-5xl mb-4">🎮</div>
+              <h3 className="text-2xl font-bold mb-4">Conversation Puzzle Game!</h3>
+              <p className="text-gray-700 mb-4 text-lg">
+                Pick the best thing to say in each situation! 
               </p>
               <p className="text-sm text-gray-600 mb-6">
-                {totalPuzzles} puzzles • Earn up to 50 XP
+                {totalPuzzles} fun puzzles • Win up to 50 XP! 🌟
               </p>
               <Button 
                 size="lg" 
@@ -401,16 +453,10 @@ export default function MiniChallenge() {
           
           {challengeStarted && !challengeComplete && currentPuzzle && (
             <div className="space-y-6">
-              {/* Scenario */}
+              {/* Scenario & Question Combined */}
               <Card className="p-6 bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-200">
-                <h3 className="text-lg font-bold text-gray-800 mb-2">📖 Situation:</h3>
-                <p className="text-xl text-gray-900">{currentPuzzle.scenario}</p>
-              </Card>
-              
-              {/* Question */}
-              <Card className="p-6 bg-white border-2 border-orange-200">
-                <h3 className="text-lg font-bold text-orange-600 mb-2">❓ Question:</h3>
-                <p className="text-xl font-semibold text-gray-900">{currentPuzzle.question}</p>
+                <p className="text-2xl font-bold text-gray-900 mb-3">{currentPuzzle.scenario}</p>
+                <p className="text-xl font-semibold text-blue-700">{currentPuzzle.question}</p>
               </Card>
               
               {/* Options */}
@@ -457,9 +503,8 @@ export default function MiniChallenge() {
               
               {/* Explanation (after answering) */}
               {answered && (
-                <Card className="p-6 bg-blue-50 border-2 border-blue-300">
-                  <h3 className="text-lg font-bold text-blue-800 mb-2">💡 Why?</h3>
-                  <p className="text-gray-800">{currentPuzzle.explanation}</p>
+                <Card className="p-6 bg-yellow-50 border-2 border-yellow-300 animate-in fade-in">
+                  <p className="text-xl font-bold text-gray-800">{currentPuzzle.explanation}</p>
                 </Card>
               )}
             </div>
