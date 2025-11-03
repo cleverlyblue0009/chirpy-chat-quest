@@ -61,6 +61,9 @@ export default function StructuredLesson() {
   const [useTextInput, setUseTextInput] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [hasRespondedToQuestion, setHasRespondedToQuestion] = useState(false);
+  const [nudgeCount, setNudgeCount] = useState(0);
+  const [noResponseTimer, setNoResponseTimer] = useState<NodeJS.Timeout | null>(null);
+  const [chatMessages, setChatMessages] = useState<Array<{sender: 'bird' | 'user', text: string}>>([]);
   
   // Bird & conversation state
   const [birdCharacter, setBirdCharacter] = useState<any>(null);
@@ -199,7 +202,7 @@ export default function StructuredLesson() {
     }
   }, []);
 
-  // Start lesson with Ruby's introduction
+  // Start lesson with Ruby's warm greeting
   const startLesson = async () => {
     if (!lessonData || !birdCharacter || !currentUser) return;
     
@@ -217,42 +220,69 @@ export default function StructuredLesson() {
       });
       setConversationId(conversationRef.id);
       
-      // Ruby's introduction
-      const introMessage = `Hi! I'm Ruby Robin, and I'm so excited to learn with you today! 
-        
-In this lesson, we're going to practice: ${lessonData.goal}
-
-I'll ask you ${lessonData.trainingQuestions.length} questions, and we'll work through them together. Don't worry if you need to try again - that's how we learn!
-
-Are you ready? Let's begin with the first question!`;
+      // Ruby's warm greeting
+      const greetingMessage = `Hello! I'm so happy to see you today! 🌟`;
+      const introMessage = `Today we're going to practice ${lessonData.goal}. I'll ask you some questions, and we can chat like friends! Ready?`;
       
-      // Generate speech
-      const audioUrl = await generateSpeech(
+      // Add greeting to chat
+      setChatMessages([{ sender: 'bird', text: greetingMessage }]);
+      
+      // Generate speech for greeting
+      const greetingAudioUrl = await generateSpeech(
+        greetingMessage,
+        'ruby_robin',
+        conversationRef.id
+      ).catch(() => undefined);
+      
+      if (greetingAudioUrl) {
+        await playAudioWithAnimation(
+          greetingAudioUrl,
+          () => setIsBirdSpeaking(true),
+          () => setIsBirdSpeaking(false)
+        ).catch(console.error);
+      } else {
+        const utterance = new SpeechSynthesisUtterance(greetingMessage);
+        setIsBirdSpeaking(true);
+        await new Promise(resolve => {
+          utterance.onend = () => {
+            setIsBirdSpeaking(false);
+            resolve(true);
+          };
+          speechSynthesis.speak(utterance);
+        });
+      }
+      
+      // Wait a bit, then add intro
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setChatMessages(prev => [...prev, { sender: 'bird', text: introMessage }]);
+      
+      // Speak intro
+      const introAudioUrl = await generateSpeech(
         introMessage,
         'ruby_robin',
         conversationRef.id
       ).catch(() => undefined);
       
-      if (audioUrl) {
-        playAudioWithAnimation(
-          audioUrl,
+      if (introAudioUrl) {
+        await playAudioWithAnimation(
+          introAudioUrl,
           () => setIsBirdSpeaking(true),
-          () => {
-            setIsBirdSpeaking(false);
-            // After intro, ask first question
-            setTimeout(() => askQuestion(0), 1000);
-          }
+          () => setIsBirdSpeaking(false)
         ).catch(console.error);
       } else {
-        // Fallback to browser TTS
         const utterance = new SpeechSynthesisUtterance(introMessage);
-        utterance.onend = () => {
-          setIsBirdSpeaking(false);
-          setTimeout(() => askQuestion(0), 1000);
-        };
         setIsBirdSpeaking(true);
-        speechSynthesis.speak(utterance);
+        await new Promise(resolve => {
+          utterance.onend = () => {
+            setIsBirdSpeaking(false);
+            resolve(true);
+          };
+          speechSynthesis.speak(utterance);
+        });
       }
+      
+      // After intro, ask first question
+      setTimeout(() => askQuestion(0), 1000);
       
     } catch (error) {
       console.error('Error starting lesson:', error);
@@ -274,8 +304,17 @@ Are you ready? Let's begin with the first question!`;
     setCurrentQuestionIndex(questionIndex);
     setHasRespondedToQuestion(false);
     setEmotionResponseGiven(false);
+    setNudgeCount(0);
+    
+    // Clear any existing timer
+    if (noResponseTimer) {
+      clearTimeout(noResponseTimer);
+    }
     
     console.log(`❓ Asking question ${questionIndex + 1}/${lessonData.trainingQuestions.length}:`, question.question);
+    
+    // Add question to chat
+    setChatMessages(prev => [...prev, { sender: 'bird', text: question.question }]);
     
     try {
       const audioUrl = await generateSpeech(
@@ -296,8 +335,66 @@ Are you ready? Let's begin with the first question!`;
         utterance.onend = () => setIsBirdSpeaking(false);
         speechSynthesis.speak(utterance);
       }
+      
+      // Set 5-minute timer for first nudge
+      const timer = setTimeout(() => {
+        if (!hasRespondedToQuestion && nudgeCount === 0) {
+          sendNudge();
+        }
+      }, 300000); // 5 minutes
+      
+      setNoResponseTimer(timer);
     } catch (error) {
       console.error('Error asking question:', error);
+    }
+  };
+  
+  // Send a gentle nudge
+  const sendNudge = async () => {
+    if (nudgeCount >= 2 || hasRespondedToQuestion) return;
+    
+    const nudgeMessages = [
+      "Take your time! I'm here whenever you're ready to answer. 😊",
+      "No rush! Let me know when you'd like to try. I believe in you! 💫"
+    ];
+    
+    const nudgeMessage = nudgeMessages[nudgeCount];
+    setNudgeCount(prev => prev + 1);
+    
+    // Add nudge to chat
+    setChatMessages(prev => [...prev, { sender: 'bird', text: nudgeMessage }]);
+    
+    try {
+      const audioUrl = await generateSpeech(
+        nudgeMessage,
+        'ruby_robin',
+        conversationId
+      ).catch(() => undefined);
+      
+      if (audioUrl) {
+        playAudioWithAnimation(
+          audioUrl,
+          () => setIsBirdSpeaking(true),
+          () => setIsBirdSpeaking(false)
+        ).catch(console.error);
+      } else {
+        const utterance = new SpeechSynthesisUtterance(nudgeMessage);
+        setIsBirdSpeaking(true);
+        utterance.onend = () => setIsBirdSpeaking(false);
+        speechSynthesis.speak(utterance);
+      }
+    } catch (error) {
+      console.error('Error sending nudge:', error);
+    }
+    
+    // Set timer for second nudge (only once)
+    if (nudgeCount === 0) {
+      const timer = setTimeout(() => {
+        if (!hasRespondedToQuestion) {
+          sendNudge();
+        }
+      }, 300000); // Another 5 minutes
+      setNoResponseTimer(timer);
     }
   };
 
@@ -400,6 +497,15 @@ Are you ready? Let's begin with the first question!`;
     
     setHasRespondedToQuestion(true);
     setIsLoading(true);
+    
+    // Clear nudge timer
+    if (noResponseTimer) {
+      clearTimeout(noResponseTimer);
+      setNoResponseTimer(null);
+    }
+    
+    // Add user response to chat
+    setChatMessages(prev => [...prev, { sender: 'user', text }]);
     
     const question = lessonData.trainingQuestions[currentQuestionIndex];
     const isCorrect = checkResponse(text, question.expectedResponses);
@@ -505,6 +611,9 @@ Are you ready? Let's begin with the first question!`;
         feedbackMessage = "Not quite! Try again - you can do it!";
       }
     }
+    
+    // Add feedback to chat
+    setChatMessages(prev => [...prev, { sender: 'bird', text: feedbackMessage }]);
     
     // Speak the feedback (TTS)
     try {
@@ -746,52 +855,40 @@ Keep practicing these skills in real conversations!`;
             </Card>
           )}
           
-          {/* During lesson: Current question */}
-          {lessonStarted && !lessonComplete && currentQuestion && (
-            <Card className="p-6 shadow-lg">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold flex-shrink-0">
-                  {currentQuestionIndex + 1}
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    {currentQuestion.question}
-                  </h3>
-                  {showHint && currentQuestion.hints && currentQuestion.hints.length > 0 && (
-                    <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <Lightbulb className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                        <p className="text-sm text-yellow-900">
-                          <strong>Hint:</strong> {currentQuestion.hints[0]}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-              
-              {/* Show attempts */}
-              {questionAttempts.filter(a => a.questionId === currentQuestion.id).map((attempt, idx) => (
-                <div 
+          {/* During lesson: Chat conversation */}
+          {lessonStarted && !lessonComplete && (
+            <div className="space-y-4">
+              {chatMessages.map((msg, idx) => (
+                <div
                   key={idx}
-                  className={`p-3 rounded-lg mb-2 ${
-                    attempt.isCorrect 
-                      ? 'bg-green-50 border border-green-200' 
-                      : 'bg-red-50 border border-red-200'
-                  }`}
+                  className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
-                  <p className="text-sm">
-                    <strong>Your answer:</strong> {attempt.userResponse}
-                    {attempt.isCorrect ? ' ✅' : ' ❌'}
-                  </p>
-                  {attempt.pronunciationScore && (
-                    <p className="text-xs text-gray-600 mt-1">
-                      Pronunciation: {attempt.pronunciationScore}%
+                  <Card
+                    className={`max-w-[80%] p-4 shadow-md ${
+                      msg.sender === 'bird'
+                        ? 'bg-white border-blue-200'
+                        : 'bg-blue-50 border-green-200'
+                    }`}
+                  >
+                    <p className="text-sm font-medium mb-2">
+                      {msg.sender === 'bird' ? '🐦 Ruby Robin' : '👤 You'}
                     </p>
-                  )}
+                    <p className="text-gray-800">{msg.text}</p>
+                  </Card>
                 </div>
               ))}
-            </Card>
+              
+              {showHint && currentQuestion && currentQuestion.hints && currentQuestion.hints.length > 0 && (
+                <Card className="p-4 bg-yellow-50 border-yellow-200">
+                  <div className="flex items-start gap-2">
+                    <Lightbulb className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-yellow-900">
+                      <strong>Hint:</strong> {currentQuestion.hints[0]}
+                    </p>
+                  </div>
+                </Card>
+              )}
+            </div>
           )}
           
           {/* Post-lesson: Completion */}
