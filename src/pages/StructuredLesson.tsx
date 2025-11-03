@@ -336,12 +336,12 @@ export default function StructuredLesson() {
         speechSynthesis.speak(utterance);
       }
       
-      // Set 5-minute timer for first nudge
+      // Set 15-second timer for emotion-based response
       const timer = setTimeout(() => {
-        if (!hasRespondedToQuestion && nudgeCount === 0) {
-          sendNudge();
+        if (!hasRespondedToQuestion) {
+          handleNoResponseTimeout();
         }
-      }, 300000); // 5 minutes
+      }, 15000); // 15 seconds
       
       setNoResponseTimer(timer);
     } catch (error) {
@@ -349,16 +349,28 @@ export default function StructuredLesson() {
     }
   };
   
-  // Send a gentle nudge
-  const sendNudge = async () => {
-    if (nudgeCount >= 2 || hasRespondedToQuestion) return;
+  // Handle no response timeout with emotional support
+  const handleNoResponseTimeout = async () => {
+    if (hasRespondedToQuestion) return;
     
-    const nudgeMessages = [
-      "Take your time! I'm here whenever you're ready to answer. 😊",
-      "No rush! Let me know when you'd like to try. I believe in you! 💫"
-    ];
+    // Build emotional message based on detected emotion or general encouragement
+    let nudgeMessage = '';
     
-    const nudgeMessage = nudgeMessages[nudgeCount];
+    if (currentEmotion) {
+      if (['sad', 'angry', 'fearful'].includes(currentEmotion.currentEmotion)) {
+        nudgeMessage = "I can see this might be tricky! Take your time. I'm here to help! 💙";
+      } else if (currentEmotion.currentEmotion === 'surprised') {
+        nudgeMessage = "Need a moment? That's okay! You've got this! 🌟";
+      } else if (currentEmotion.engagementLevel === 'low') {
+        nudgeMessage = "Hey, I'm here! Want to try? I believe in you! 💫";
+      } else {
+        nudgeMessage = "Take your time! Ready when you are! 😊";
+      }
+    } else {
+      // No emotion detected, use general encouragement
+      nudgeMessage = "I'm listening! You can do it! 🌟";
+    }
+    
     setNudgeCount(prev => prev + 1);
     
     // Add nudge to chat
@@ -387,13 +399,13 @@ export default function StructuredLesson() {
       console.error('Error sending nudge:', error);
     }
     
-    // Set timer for second nudge (only once)
-    if (nudgeCount === 0) {
+    // Set timer for another nudge (every 15 seconds, max 3 times)
+    if (nudgeCount < 2) {
       const timer = setTimeout(() => {
         if (!hasRespondedToQuestion) {
-          sendNudge();
+          handleNoResponseTimeout();
         }
-      }, 300000); // Another 5 minutes
+      }, 15000); // Another 15 seconds
       setNoResponseTimer(timer);
     }
   };

@@ -33,35 +33,35 @@ export const LESSON_DATA: LessonData[] = [
     trainingQuestions: [
       {
         id: 'q1',
-        question: 'Hello! Can you say hello back to me?',
+        question: 'Say hello to me!',
         expectedResponses: ['hello', 'hi', 'hey', 'good morning', 'good afternoon'],
         hints: ['Try saying "Hello!" or "Hi!"'],
         category: 'greeting'
       },
       {
         id: 'q2',
-        question: 'Great! Now, what do you say when you see someone in the morning?',
+        question: 'What do you say in the morning?',
         expectedResponses: ['good morning', 'morning', 'hello', 'hi'],
         hints: ['Think about the time of day!', 'We usually say "Good morning"'],
         category: 'greeting'
       },
       {
         id: 'q3',
-        question: 'Perfect! And what if it\'s the afternoon, after lunch time?',
+        question: 'What about in the afternoon?',
         expectedResponses: ['good afternoon', 'afternoon', 'hello', 'hi'],
         hints: ['After lunch, we say "Good afternoon"'],
         category: 'greeting'
       },
       {
         id: 'q4',
-        question: 'Excellent! Now, can you greet me as if we just met for the first time today?',
+        question: 'Greet me like we just met!',
         expectedResponses: ['hello', 'hi', 'good morning', 'good afternoon', 'nice to meet you'],
         hints: ['Choose any greeting you like!'],
         category: 'greeting'
       },
       {
         id: 'q5',
-        question: 'Wonderful! One more time - greet me like you\'re seeing a friend at school!',
+        question: 'Now greet a friend at school!',
         expectedResponses: ['hi', 'hello', 'hey', 'good morning', 'what\'s up'],
         hints: ['Friends often say "Hi!" or "Hey!"'],
         category: 'greeting'
@@ -80,35 +80,35 @@ export const LESSON_DATA: LessonData[] = [
     trainingQuestions: [
       {
         id: 'q1',
-        question: 'Hello! My name is Ruby. What\'s your name?',
+        question: 'What\'s your name?',
         expectedResponses: ['my name is', 'i\'m', 'i am', 'call me', 'name'],
         hints: ['Say "My name is..." and then your name'],
         category: 'introduction'
       },
       {
         id: 'q2',
-        question: 'Nice to meet you! Can you introduce yourself again, but this time say "I\'m" and then your name?',
+        question: 'Now say "I\'m" and your name!',
         expectedResponses: ['i\'m', 'i am', 'my name'],
         hints: ['Try "I\'m [your name]"'],
         category: 'introduction'
       },
       {
         id: 'q3',
-        question: 'Great! Now, if someone asks "Who are you?", how would you answer?',
+        question: 'Who are you?',
         expectedResponses: ['i\'m', 'i am', 'my name is', 'name'],
         hints: ['You can say your name!'],
         category: 'introduction'
       },
       {
         id: 'q4',
-        question: 'Perfect! Can you tell me your name one more time, nice and clearly?',
+        question: 'Tell me your name clearly!',
         expectedResponses: ['my name', 'i\'m', 'i am', 'call me'],
         hints: ['Just say your name clearly'],
         category: 'introduction'
       },
       {
         id: 'q5',
-        question: 'Excellent! Last one - introduce yourself like you\'re meeting a new friend!',
+        question: 'Introduce yourself to a new friend!',
         expectedResponses: ['hi', 'hello', 'my name', 'i\'m', 'nice to meet you'],
         hints: ['Start with a greeting, then say your name!'],
         category: 'introduction'
@@ -141,14 +141,14 @@ export const LESSON_DATA: LessonData[] = [
       },
       {
         id: 'q3',
-        question: 'I\'m doing great, thank you! When someone asks "How are you?", what\'s another way to answer?',
+        question: 'What\'s another way to say you\'re good?',
         expectedResponses: ['fine', 'good', 'great', 'okay', 'wonderful', 'not bad', 'pretty good'],
         hints: ['You could say "Fine!" or "Great!"'],
         category: 'response'
       },
       {
         id: 'q4',
-        question: 'Perfect! Now let\'s practice a full exchange. First, greet me and ask how I am.',
+        question: 'Greet me and ask how I am!',
         expectedResponses: ['hello', 'hi', 'how are you', 'how'],
         hints: ['Say hello, then ask "How are you?"'],
         category: 'conversation'
@@ -493,7 +493,7 @@ export const LESSON_DATA: LessonData[] = [
       },
       {
         id: 'q4',
-        question: 'Perfect! If a friend says "I got a new pet", what would you ask them?',
+        question: 'Your friend got a new pet! What do you ask?',
         expectedResponses: ['what kind', 'what is', 'what\'s its name', 'can i see', 'how'],
         hints: ['Ask about the type of pet or its name!'],
         category: 'question'
