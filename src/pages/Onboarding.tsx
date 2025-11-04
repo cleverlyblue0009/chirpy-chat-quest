@@ -53,6 +53,8 @@ export default function Onboarding() {
     return true;
   };
 
+  const [showAssessmentChoice, setShowAssessmentChoice] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -72,17 +74,29 @@ export default function Onboarding() {
       
       toast({
         title: "Profile completed!",
-        description: "Let's start with a quick assessment to personalize your learning.",
+        description: "Choose how you'd like to start your learning journey.",
       });
       
-      // Navigate to assessment
-      navigate('/assessment');
+      // Show assessment choice instead of navigating directly
+      setShowAssessmentChoice(true);
     } catch (error: any) {
       console.error('Onboarding error:', error);
       setError('Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleTakeAssessment = () => {
+    navigate('/assessment');
+  };
+
+  const handleSkipAssessment = () => {
+    toast({
+      title: "Welcome to Chirp! 🎉",
+      description: "Let's start learning!",
+    });
+    navigate('/');
   };
 
   const getBirdMessage = () => {
@@ -97,6 +111,58 @@ export default function Onboarding() {
       return "Great! Let's start your communication journey! 🦅";
     }
   };
+
+  // Show assessment choice after profile completion
+  if (showAssessmentChoice) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-orange-50 to-blue-50 p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-orange-100 rounded-full mb-4">
+              <Sparkles className="h-10 w-10 text-orange-500" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">You're All Set! 🎉</h1>
+            <p className="text-gray-600">Choose how you'd like to begin your journey</p>
+          </div>
+
+          <Card className="shadow-xl">
+            <CardHeader>
+              <CardTitle className="text-xl">Ready to Start?</CardTitle>
+              <CardDescription>
+                Take a quick assessment to personalize your experience, or jump right in!
+              </CardDescription>
+            </CardHeader>
+            
+            <CardContent className="space-y-4">
+              <Button 
+                onClick={handleTakeAssessment}
+                className="w-full" 
+                size="lg"
+              >
+                Take Assessment 🎯
+                <span className="ml-2">→</span>
+              </Button>
+
+              <Button 
+                onClick={handleSkipAssessment}
+                variant="outline"
+                className="w-full" 
+                size="lg"
+              >
+                Skip to Dashboard
+              </Button>
+
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-700">
+                  <strong>💡 Tip:</strong> The assessment helps us understand your current level and create a personalized learning path. It only takes 2-3 minutes!
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-orange-50 to-blue-50 p-4">
@@ -190,7 +256,7 @@ export default function Onboarding() {
                   </>
                 ) : (
                   <>
-                    Continue to Assessment
+                    Continue
                     <span className="ml-2">→</span>
                   </>
                 )}
@@ -201,7 +267,7 @@ export default function Onboarding() {
 
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-500">
-            Next: A quick assessment to find the perfect starting point for you
+            Next: Choose to take an assessment or start exploring
           </p>
         </div>
       </div>

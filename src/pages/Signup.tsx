@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Mail, Lock, User, Calendar, Chrome } from 'lucide-react';
+import { Loader2, Mail, Lock, User, Calendar, Chrome, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function Signup() {
@@ -19,6 +19,7 @@ export default function Signup() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showAssessmentChoice, setShowAssessmentChoice] = useState(false);
   
   const { signUp, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -79,8 +80,8 @@ export default function Signup() {
         description: "Your account has been created successfully.",
       });
       
-      // Navigate to assessment after successful signup
-      navigate('/assessment');
+      // Show assessment choice
+      setShowAssessmentChoice(true);
     } catch (error: any) {
       console.error('Signup error:', error);
       
@@ -120,6 +121,70 @@ export default function Signup() {
       setLoading(false);
     }
   };
+
+  const handleTakeAssessment = () => {
+    navigate('/assessment');
+  };
+
+  const handleSkipAssessment = () => {
+    toast({
+      title: "Welcome to Chirp! 🎉",
+      description: "Let's start learning!",
+    });
+    navigate('/');
+  };
+
+  // Show assessment choice after successful signup
+  if (showAssessmentChoice) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-orange-50 to-blue-50 p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 bg-orange-100 rounded-full mb-4">
+              <Sparkles className="h-10 w-10 text-orange-500" />
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">You're All Set! 🎉</h1>
+            <p className="text-gray-600">Choose how you'd like to begin your journey</p>
+          </div>
+
+          <Card className="shadow-xl">
+            <CardHeader>
+              <CardTitle className="text-xl">Ready to Start?</CardTitle>
+              <CardDescription>
+                Take a quick assessment to personalize your experience, or jump right in!
+              </CardDescription>
+            </CardHeader>
+            
+            <CardContent className="space-y-4">
+              <Button 
+                onClick={handleTakeAssessment}
+                className="w-full" 
+                size="lg"
+              >
+                Take Assessment 🎯
+                <span className="ml-2">→</span>
+              </Button>
+
+              <Button 
+                onClick={handleSkipAssessment}
+                variant="outline"
+                className="w-full" 
+                size="lg"
+              >
+                Skip to Dashboard
+              </Button>
+
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-700">
+                  <strong>💡 Tip:</strong> The assessment helps us understand your current level and create a personalized learning path. It only takes 2-3 minutes!
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-orange-50 to-blue-50 p-4">
